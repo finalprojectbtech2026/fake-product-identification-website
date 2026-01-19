@@ -1,0 +1,279 @@
+:root {
+  --bg: #06050b;
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.72);
+  --muted2: rgba(255, 255, 255, 0.56);
+
+  --border: rgba(255, 255, 255, 0.14);
+  --border2: rgba(255, 255, 255, 0.20);
+
+  --card: rgba(255, 255, 255, 0.07);
+  --card2: rgba(255, 255, 255, 0.10);
+
+  --purple: #8b5cf6;
+  --purple2: #a78bfa;
+  --purple3: #6d28d9;
+
+  --shadow: 0 18px 70px rgba(0, 0, 0, 0.65);
+  --shadow2: 0 26px 110px rgba(0, 0, 0, 0.78);
+}
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 9999;
+  background:
+    radial-gradient(900px 520px at 18% 12%, rgba(139, 92, 246, 0.22), transparent 60%),
+    radial-gradient(780px 520px at 85% 22%, rgba(167, 139, 250, 0.14), transparent 62%),
+    rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.auth-modal {
+  width: 100%;
+  max-width: 460px;
+  position: relative;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(700px 240px at 20% 0%, rgba(139, 92, 246, 0.16), transparent 55%),
+    radial-gradient(700px 240px at 90% 105%, rgba(167, 139, 250, 0.10), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.05));
+  box-shadow: var(--shadow2);
+  overflow: hidden;
+}
+
+.auth-glow {
+  position: absolute;
+  inset: -2px;
+  background: radial-gradient(circle at 20% 12%, rgba(255, 255, 255, 0.16), transparent 45%);
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.auth-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 10px 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.auth-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.28), transparent 55%),
+    linear-gradient(135deg, var(--purple), var(--purple2));
+  box-shadow:
+    0 18px 55px rgba(139, 92, 246, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+  flex: 0 0 auto;
+}
+
+.auth-titles {
+  min-width: 0;
+}
+
+.auth-title {
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.2;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.auth-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.auth-close {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+
+.auth-close:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.auth-close:active {
+  transform: scale(0.98);
+}
+
+.auth-tabs {
+  position: relative;
+  z-index: 1;
+  padding: 10px 18px 6px 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.auth-tab {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+
+.auth-tab:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.auth-tab:active {
+  transform: scale(0.985);
+}
+
+.auth-tab.active {
+  background: linear-gradient(135deg, var(--purple), var(--purple2));
+  color: #0b0614;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.auth-form {
+  position: relative;
+  z-index: 1;
+  padding: 12px 18px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.70);
+}
+
+.auth-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.34);
+  padding: 10px 12px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.auth-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  user-select: none;
+}
+
+.auth-input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.auth-input::placeholder {
+  color: rgba(255, 255, 255, 0.40);
+}
+
+.auth-control:focus-within {
+  border-color: rgba(139, 92, 246, 0.70);
+  box-shadow: 0 0 0 5px rgba(139, 92, 246, 0.16);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.auth-error {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 10px 12px;
+  border-radius: 14px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.auth-submit {
+  margin-top: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  background: linear-gradient(135deg, var(--purple), var(--purple2));
+  color: #0b0614;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 18px 60px rgba(139, 92, 246, 0.20);
+  transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
+}
+
+.auth-submit:hover {
+  opacity: 0.97;
+  box-shadow: 0 22px 80px rgba(139, 92, 246, 0.26);
+}
+
+.auth-submit:active {
+  transform: scale(0.985);
+}
+
+.auth-footnote {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.56);
+  text-align: center;
+  line-height: 1.35;
+}
+
+@media (max-width: 420px) {
+  .auth-title {
+    font-size: 15px;
+  }
+  .auth-subtitle {
+    display: none;
+  }
+}

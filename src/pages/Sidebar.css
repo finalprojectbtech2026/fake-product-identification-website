@@ -1,0 +1,110 @@
+.sidebar {
+    width: 300px;
+    max-width: 100%;
+    height: 100vh;
+    background: linear-gradient(to right, #000000, #1a1a1a, #2c2c2c);
+    color: #fff;
+    overflow-y: auto;
+    font-family: sans-serif;
+    border-right: 2px solid rgb(217, 98, 69);
+    box-sizing: border-box;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.sidebar::-webkit-scrollbar {
+    display: none;
+}
+
+  .sidebar-search {
+    position: sticky;
+    top: 0;
+    padding: 10px;
+    background: #111;
+    z-index: 2;
+  }
+  
+  .sidebar-search-input {
+    width: 90%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9em;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+  }
+  
+  .sidebar-search-input::placeholder {
+    color: #ccc;
+  }
+  
+  .sidebar-search-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
+  }
+  
+  .sidebar-category {
+    margin: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    overflow: hidden;
+  }
+  
+  .sidebar-category-title {
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  
+  .sidebar-toggle-icon {
+    margin-left: 8px;
+    font-size: 0.8em;
+    transition: transform 0.3s ease;
+  }
+  
+  .sidebar-items {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 10px 0;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, opacity 0.4s ease;
+  }
+  
+  .sidebar-category.open .sidebar-items {
+    opacity: 1;
+    max-height: 800px;
+  }
+  
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    font-size: 15px;
+    transition: background 0.2s, transform 0.2s;
+    cursor: pointer;
+  }
+  
+  .sidebar-item:hover {
+    background: rgba(255,255,255,0.08);
+    transform: translateX(6px);
+  }
+  
+  .sidebar-item-icon {
+    display: inline-flex;
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    align-items: center;
+    justify-content: center;
+  }
+  

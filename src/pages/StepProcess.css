@@ -1,0 +1,275 @@
+{/*.step-process-wrapper {
+    border: 3px solid #e8578c;
+    padding: 2px;
+    margin: 60px auto;
+    border-radius: 20px;
+    width: 70%;
+    display: flex;
+    justify-content: center;
+  }
+  
+  
+  .step-process-section {
+    background-color: #000;
+    border-radius: 15px;
+    padding: 0px 20px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .step-process-title-wrapper {
+    text-align: center;
+    position: relative;
+    margin-bottom: 60px;
+  }
+  
+  .step-process-title {
+    font-size: 2.8rem;
+    font-weight: 900;
+    background: linear-gradient(90deg, #f5a84f, #e8578c, #b12156);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+  }
+  
+  .step-process-underline {
+    height: 4px;
+    width: 0%;
+    left: 50%;
+    bottom: 35px;
+    position: absolute;
+    background: linear-gradient(to right, #f26624, #fff);
+    animation: slideUnderline 2s infinite ease-in-out;
+    border-radius: 5px;
+  }
+  
+  @keyframes slideUnderline {
+    0% {
+      left: 50%;
+      width: 0%;
+    }
+    50% {
+      left: 25%;
+      width: 50%;
+    }
+    100% {
+      left: 50%;
+      width: 0%;
+    }
+  }
+  
+
+  .step-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+  
+  .step-flow::before {
+    content: "";
+    position: absolute;
+    top: 40px;
+    bottom: 40px;
+    width: 4px;
+    background: linear-gradient(#f26624, #e8578c);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 0;
+  }
+  
+  .step-card {
+    width: 90%;
+    max-width: 500px;
+    margin: 30px 0;
+    padding: 30px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    border: 2px solid transparent;
+    transition: 0.4s;
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(255, 255, 255, 0.05);
+  }
+  
+  .step-card:hover {
+    transform: scale(1.05) rotateX(2deg) rotateY(2deg);
+    border-image: linear-gradient(45deg, #f26624, #e8578c) 1;
+    box-shadow: 0 0 25px rgba(242, 102, 36, 0.3);
+  }
+  
+  .step-icon {
+    font-size: 2rem;
+    margin-bottom: 15px;
+    color: #f26624;
+  }
+  
+  .step-card h3 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+  }
+  
+  .step-card p {
+    font-size: 1rem;
+    color: #ccc;
+  }
+  
+  @media (max-width: 768px) {
+    .step-process-title {
+      font-size: 2rem;
+    }
+  
+    .step-card h3 {
+      font-size: 1.2rem;
+    }
+  
+    .step-card p {
+      font-size: 0.95rem;
+    }
+  
+    .step-icon {
+      font-size: 1.5rem;
+    }
+
+    .step-process-underline {
+        height: 4px;
+        width: 0%;
+        left: 50%;
+        bottom: 25px;
+        position: absolute;
+        background: linear-gradient(to right, #f26624, #fff);
+        animation: slideUnderline 2s infinite ease-in-out;
+        border-radius: 5px;
+      }
+      
+      @keyframes slideUnderline {
+        0% {
+          left: 50%;
+          width: 0%;
+        }
+        50% {
+          left: 25%;
+          width: 50%;
+        }
+        100% {
+          left: 50%;
+          width: 0%;
+        }
+      }
+  }  */}
+
+
+
+  .step-process-wrapper {
+    width: 100%;
+    padding: 60px 0;
+    display: flex;
+    justify-content: center;
+    background: #0f0f0f;
+  }
+  
+  .step-process-section {
+    width: 90%;
+    max-width: 1200px;
+    color: #fff;
+    text-align: center;
+  }
+  
+  .step-process-title-wrapper {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 40px;
+  }
+  
+  .step-process-title {
+    font-size: 2.8rem;
+    font-weight: bold;
+    background: linear-gradient(90deg, #f5a84f, #e8578c, #b12156);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+  }
+  
+  .step-process-underline {
+    height: 4px;
+    width: 100%;
+    margin: -25px auto 0;
+    background: linear-gradient(to right, #f26624, #fff);
+    border-radius: 5px;
+  }
+  
+  .svg-step-container {
+    position: relative;
+    width: 100%;
+    height: 800px;
+  }
+  
+  .curve-path {
+    position: relative;
+    margin-top: 100px;
+    margin-left: 100px;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+  
+  .step-bubble {
+    position: absolute;
+    width: 220px;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    border: 2px solid transparent;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 25px rgba(255, 255, 255, 0.05);
+    z-index: 1;
+  }
+  
+  .step-bubble:hover {
+    transform: scale(1.05);
+    border-image: linear-gradient(45deg, #f26624, #e8578c) 1;
+    box-shadow: 0 0 25px rgba(242, 102, 36, 0.3);
+  }
+  
+  .step-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    color: #f26624;
+  }
+  
+  .step-bubble h3 {
+    font-size: 1.3rem;
+    margin: 10px 0;
+  }
+  
+  .step-bubble p {
+    font-size: 0.9rem;
+    color: #ddd;
+  }
+  
+  @media (max-width: 768px) {
+    .svg-step-container {
+      height: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+  
+    .curve-path {
+      display: none;
+    }
+  
+    .step-bubble {
+      position: static;
+      margin: 20px 0;
+      width: 90%;
+    }
+  }
+  
+  

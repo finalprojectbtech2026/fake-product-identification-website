@@ -1,0 +1,22 @@
+.design-page {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+  
+  
+  
+  .design-main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+  
+  .design-cost {
+    background: #333;
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    font-size: 18px;
+  }
+  

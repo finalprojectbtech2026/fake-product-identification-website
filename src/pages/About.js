@@ -1,540 +1,317 @@
 import React from "react";
-import "./About.css";
 import Navbar from "./Navbar";
-import Footer from "./Footer";
+import "./About.css";
 
-const About = () => {
+function About() {
   return (
-    <>
+    <div className="how-shell">
       <Navbar />
 
-      <div className="about-page">
-        <section className="about-section black">
-          <div className="about-container hero-grid">
-            <div className="hero-left">
-              <h1 className="about-title">
-                Tanvi Skin & Health <span>Clinic</span>
-              </h1>
-              <p className="about-subtitle">
-                A place where modern dermatology meets trusted general medicine,
-                with care that feels personal, precise, and truly helpful.
-              </p>
-              <div className="hero-highlights">
-                <div className="highlight-box">
-                  <h3>Skin</h3>
-                  <p>Acne, pigmentation, allergy, laser and anti-aging care</p>
-                </div>
-                <div className="highlight-box">
-                  <h3>Hair</h3>
-                  <p>Hair fall, dandruff, regrowth plans and scalp analysis</p>
-                </div>
-                <div className="highlight-box">
-                  <h3>General Medicine</h3>
-                  <p>Fever, diabetes, hypertension, lifestyle disorders</p>
-                </div>
-              </div>
-            </div>
+      <section className="how-hero">
+        <div className="how-wrap how-hero-grid">
+          <div className="how-hero-left">
+            <div className="how-badge">How it Works</div>
 
-            <div className="hero-right">
-              <img
-                src="/Images/dermatology-clinic-banner.jpg"
-                alt="Clinic Banner"
-                className="hero-image"
-              />
-            </div>
-          </div>
-        </section>
+            <h1 className="how-title">
+              Verify Product{" "}
+              <span className="how-title-accent">Authenticity</span> using Blockchain
+            </h1>
 
-        <section className="about-section white">
-          <div className="about-container split-grid">
-            <div className="split-image">
-              <img src="/Images/main-banner1.jpg" alt="Main Banner" />
-            </div>
-            <div className="split-content">
-              <h2 className="section-title">About the Clinic</h2>
-              <p className="section-text">
-                Tanvi Skin & Health Clinic focuses on results, comfort, and
-                complete care. We support patients with both dermatology and
-                general medicine, so treatment feels connected and thorough.
-              </p>
-              <p className="section-text">
-                Whether you are dealing with acne, pigmentation, hair fall, or a
-                complex internal medicine concern, our goal is to give you a
-                clear plan, correct diagnosis, and lasting improvement.
-              </p>
-              <div className="pill-row">
-                <span className="pill">Patient-first care</span>
-                <span className="pill">Modern procedures</span>
-                <span className="pill">Trust and clarity</span>
-                <span className="pill">Safe treatments</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-
-
-        <section className="ownersNeo">
-          <div className="ownersNeoGlow"></div>
-
-          <div className="ownersNeoInner">
-            <div className="ownersNeoHeadingWrap">
-              <h2 className="ownersNeoHeading">Meet Our Clinic Owners</h2>
-            </div>
-
-            <div className="ownersNeoGrid">
-              <div className="ownerNeoCard">
-                <div className="ownerNeoBorder"></div>
-
-                <div className="ownerNeoRarity">
-                  <span className="ownerNeoGem"></span>
-                  <span className="ownerNeoGem"></span>
-                  <span className="ownerNeoGem"></span>
-                </div>
-
-                <div className="ownerNeoType">Founder</div>
-
-                <div className="ownerNeoFrame">
-                  <div className="ownerNeoParticle"></div>
-                  <div className="ownerNeoParticle"></div>
-                  <div className="ownerNeoParticle"></div>
-                  <div className="ownerNeoParticle"></div>
-                  <div className="ownerNeoParticle"></div>
-
-                  <img
-                    src={`${process.env.PUBLIC_URL}/Images/doctor-hareen-kumar.jpeg`}
-                    alt="Dr. Hareen Kumar"
-                    className="ownerNeoImg"
-                  />
-
-                  <div className="ownerNeoFrameDark"></div>
-                  <div className="ownerNeoShine"></div>
-                  <div className="ownerNeoScanlines"></div>
-                  <div className="ownerNeoHolo"></div>
-                </div>
-
-                <div className="ownerNeoBody">
-                  <div className="ownerNeoName">Dr. Hareen Kumar Regulavalasa</div>
-
-                  <div className="ownerNeoStats">
-                    <div className="ownerNeoStat">
-                      <div className="ownerNeoStatIcon">🩺</div>
-                      <div className="ownerNeoStatValue">MD</div>
-                      <div className="ownerNeoStatLabel">Medicine</div>
-                    </div>
-
-                    <div className="ownerNeoStat">
-                      <div className="ownerNeoStatIcon">🏥</div>
-                      <div className="ownerNeoStatValue">6+</div>
-                      <div className="ownerNeoStatLabel">Years</div>
-                    </div>
-
-                    <div className="ownerNeoStat">
-                      <div className="ownerNeoStatIcon">💉</div>
-                      <div className="ownerNeoStatValue">AIG</div>
-                      <div className="ownerNeoStatLabel">FAIG</div>
-                    </div>
-
-                    <div className="ownerNeoStat">
-                      <div className="ownerNeoStatIcon">✅</div>
-                      <div className="ownerNeoStatValue">Care</div>
-                      <div className="ownerNeoStatLabel">Trusted</div>
-                    </div>
-                  </div>
-
-                  <div className="ownerNeoAbility">
-                    <div className="ownerNeoAbilityHeader">
-                      <div className="ownerNeoAbilityIcon">💠</div>
-                      <div className="ownerNeoAbilityName">Clinical Profile</div>
-                      <div className="ownerNeoAbilityCost">Senior</div>
-                    </div>
-
-                    <div className="ownerNeoAbilityDesc">
-                      <p><span>Qualification:</span> MBBS, MD (General Medicine)</p>
-                      <p><span>Fellowships:</span> Primary Care Rheumatology, CCEBDM, FAIG</p>
-                      <p><span>Expertise:</span> Diabetes, Hypertension, Infectious Diseases, Lifestyle Disorders</p>
-                      <p><span>Position:</span> Co-Founder, Tanvi Skin & Health Clinic</p>
-                    </div>
-                  </div>
-
-                  <div className="ownerNeoFlavor">
-                    Evidence-based care with a focus on both acute and chronic medical support, including critical cases and multidisciplinary conditions.
-                  </div>
-
-                  <div className="ownerNeoId">TSH-001 • TANVI OWNERS</div>
-                </div>
-
-                <div className="ownerNeoGlitch"></div>
-                <div className="ownerNeoStream"></div>
-                <div className="ownerNeoStream"></div>
-                <div className="ownerNeoStream"></div>
-                <div className="ownerNeoStream"></div>
-              </div>
-
-              <div className="ownerNeoCard">
-                <div className="ownerNeoBorder"></div>
-
-                <div className="ownerNeoRarity">
-                  <span className="ownerNeoGem"></span>
-                  <span className="ownerNeoGem"></span>
-                  <span className="ownerNeoGem"></span>
-                </div>
-
-                <div className="ownerNeoType">Founder</div>
-
-                <div className="ownerNeoFrame">
-                  <div className="ownerNeoParticle"></div>
-                  <div className="ownerNeoParticle"></div>
-                  <div className="ownerNeoParticle"></div>
-                  <div className="ownerNeoParticle"></div>
-                  <div className="ownerNeoParticle"></div>
-
-                  <img
-                    src={`${process.env.PUBLIC_URL}/Images/doctor-mounika.jpeg`}
-                    alt="Dr. Uddavolu Mounika"
-                    className="ownerNeoImg"
-                  />
-
-                  <div className="ownerNeoFrameDark"></div>
-                  <div className="ownerNeoShine"></div>
-                  <div className="ownerNeoScanlines"></div>
-                  <div className="ownerNeoHolo"></div>
-                </div>
-
-                <div className="ownerNeoBody">
-                  <div className="ownerNeoName">Dr. Uddavolu Mounika</div>
-
-                  <div className="ownerNeoStats">
-                    <div className="ownerNeoStat">
-                      <div className="ownerNeoStatIcon">🩺</div>
-                      <div className="ownerNeoStatValue">MD</div>
-                      <div className="ownerNeoStatLabel">Dermatology</div>
-                    </div>
-
-                    <div className="ownerNeoStat">
-                      <div className="ownerNeoStatIcon">🏛️</div>
-                      <div className="ownerNeoStatValue">RMC</div>
-                      <div className="ownerNeoStatLabel">MBBS</div>
-                    </div>
-
-                    <div className="ownerNeoStat">
-                      <div className="ownerNeoStatIcon">🏥</div>
-                      <div className="ownerNeoStatValue">GMC</div>
-                      <div className="ownerNeoStatLabel">MD</div>
-                    </div>
-
-                    <div className="ownerNeoStat">
-                      <div className="ownerNeoStatIcon">✅</div>
-                      <div className="ownerNeoStatValue">Care</div>
-                      <div className="ownerNeoStatLabel">Evidence-based</div>
-                    </div>
-                  </div>
-
-                  <div className="ownerNeoAbility">
-                    <div className="ownerNeoAbilityHeader">
-                      <div className="ownerNeoAbilityIcon">💠</div>
-                      <div className="ownerNeoAbilityName">Clinical Profile</div>
-                      <div className="ownerNeoAbilityCost">Dermatologist</div>
-                    </div>
-
-                    <div className="ownerNeoAbilityDesc">
-                      <p><span>Qualification:</span> MBBS (Rangaraya Medical College), MD (Dermatology, Guntur Medical College)</p>
-                      <p><span>Experience:</span> Senior Resident, RIMS Government Medical College, Srikakulam</p>
-                      <p><span>Specialization:</span> Skin, hair, and nail disorders</p>
-                      <p><span>Approach:</span> Patient-focused, evidence-based dermatological care</p>
-                    </div>
-                  </div>
-
-                  <div className="ownerNeoFlavor">
-                    Specialized dermatology care focused on accurate diagnosis and personalized treatment for skin, hair, and nail concerns with evidence-based practice.
-                  </div>
-
-                  <div className="ownerNeoId">TSH-002 • TANVI OWNERS</div>
-                </div>
-
-                <div className="ownerNeoGlitch"></div>
-                <div className="ownerNeoStream"></div>
-                <div className="ownerNeoStream"></div>
-                <div className="ownerNeoStream"></div>
-                <div className="ownerNeoStream"></div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-
-
-        <section className="about-section white">
-          <div className="about-container three-banner">
-            <h2 className="section-title center">Special Care Areas</h2>
-            <p className="section-text center">
-              Dedicated focus areas that patients frequently seek help for.
+            <p className="how-desc">
+              Our system uses SHA-256 hashing and blockchain records to keep every product event permanent,
+              from manufacturing to final customer scan.
             </p>
 
-            <div className="three-grid">
-              <div className="three-card">
-                <img src="/Images/skin-treatments-banner.jpg" alt="Skin Care" />
-                <h3>Skin Treatments</h3>
-                <p>Acne, pigmentation, allergies, anti-aging and more.</p>
+            <div className="how-hero-actions">
+              <div className="how-pill">Manufacturer → QR</div>
+              <div className="how-pill how-pill-alt">Seller → Updates</div>
+              <div className="how-pill">Consumer → Scan</div>
+            </div>
+
+            <div className="how-mini-stats">
+              <div className="how-stat">
+                <div className="how-stat-k">Immutable Logs</div>
+                <div className="how-stat-v">Blockchain Records</div>
               </div>
-              <div className="three-card">
-                <img src="/Images/clinic-aesthetic-banner.jpg" alt="Aesthetic" />
-                <h3>Aesthetic Care</h3>
-                <p>Procedures that enhance your confidence naturally.</p>
+              <div className="how-stat">
+                <div className="how-stat-k">Secure Hashing</div>
+                <div className="how-stat-v">SHA-256 Chain</div>
               </div>
-              <div className="three-card">
-                <img src="/Images/hair-scalp-care-banner.jpg" alt="Hair Care" />
-                <h3>Hair & Scalp</h3>
-                <p>Solutions for hair fall and scalp health improvement.</p>
+              <div className="how-stat">
+                <div className="how-stat-k">Fast Verify</div>
+                <div className="how-stat-v">QR Scan Result</div>
               </div>
             </div>
           </div>
-        </section>
 
+          <div className="how-hero-right">
+            <div className="how-qr-card">
+              <div className="how-qr-top">
+                <div className="how-qr-tag">Dynamic QR</div>
+                <div className="how-qr-tag how-qr-tag-outline">SHA-256</div>
+              </div>
 
+              <div className="how-qr-box" aria-hidden="true">
+                <div className="how-qr-glow" />
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" className="how-qr-svg">
+                  <path d="M160 224L224 224L224 160L160 160L160 224zM96 144C96 117.5 117.5 96 144 96L240 96C266.5 96 288 117.5 288 144L288 240C288 266.5 266.5 288 240 288L144 288C117.5 288 96 266.5 96 240L96 144zM160 480L224 480L224 416L160 416L160 480zM96 400C96 373.5 117.5 352 144 352L240 352C266.5 352 288 373.5 288 400L288 496C288 522.5 266.5 544 240 544L144 544C117.5 544 96 522.5 96 496L96 400zM416 160L416 224L480 224L480 160L416 160zM400 96L496 96C522.5 96 544 117.5 544 144L544 240C544 266.5 522.5 288 496 288L400 288C373.5 288 352 266.5 352 240L352 144C352 117.5 373.5 96 400 96zM384 416C366.3 416 352 401.7 352 384C352 366.3 366.3 352 384 352C401.7 352 416 366.3 416 384C416 401.7 401.7 416 384 416zM384 480C401.7 480 416 494.3 416 512C416 529.7 401.7 544 384 544C366.3 544 352 529.7 352 512C352 494.3 366.3 480 384 480zM480 512C480 494.3 494.3 480 512 480C529.7 480 544 494.3 544 512C544 529.7 529.7 544 512 544C494.3 544 480 529.7 480 512zM512 416C494.3 416 480 401.7 480 384C480 366.3 494.3 352 512 352C529.7 352 544 366.3 544 384C544 401.7 529.7 416 512 416zM480 448C480 465.7 465.7 480 448 480C430.3 480 416 465.7 416 448C416 430.3 430.3 416 448 416C465.7 416 480 430.3 480 448z" />
+                </svg>
+                <div className="how-scanline" />
+              </div>
 
-
-
-        <section className="aboutSplit">
-          <div className="aboutSplitInner">
-            <div className="aboutLeft">
-              <div className="aboutImageWrap">
-                <img
-                  className="aboutCircleMain"
-                  src={`${process.env.PUBLIC_URL}/Images/circle1.jpg`}
-                  alt="Clinic"
-                />
-                <img
-                  className="aboutCircleSub"
-                  src={`${process.env.PUBLIC_URL}/Images/circle2.jpg`}
-                  alt="Care"
-                />
-                <div className="aboutGlow"></div>
-                <div className="aboutDots"></div>
+              <div className="how-qr-meta">
+                <div className="how-meta-row">
+                  <span className="how-meta-k">QR Data</span>
+                  <span className="how-meta-v">Product ID + State Hash</span>
+                </div>
+                <div className="how-meta-row">
+                  <span className="how-meta-k">Result</span>
+                  <span className="how-meta-v how-meta-ok">Original or Duplicate</span>
+                </div>
               </div>
             </div>
 
-            <div className="aboutRight">
-              <h2 className="aboutTitle">
-                Advanced Dermatology For
-                <br /> Skin, Hair & Aesthetic Care
-              </h2>
-
-              <p className="aboutText">
-                At Tanvi Skin & Health Skin, every treatment is designed around your
-                skin type, lifestyle, and long term goals. From acne correction and
-                pigmentation care to hair restoration and advanced aesthetic solutions,
-                you get expert support backed by modern dermatology.
-              </p>
-
-              <div className="aboutPoints">
-                <div className="aboutPoint">
-                  <span className="pointTick"></span>
-                  <p>Personalized skin and hair treatment plans</p>
-                </div>
-
-                <div className="aboutPoint">
-                  <span className="pointTick"></span>
-                  <p>Clinical grade procedures with safe care</p>
-                </div>
-
-                <div className="aboutPoint">
-                  <span className="pointTick"></span>
-                  <p>Modern aesthetic solutions for confidence</p>
-                </div>
-
-                <div className="aboutPoint">
-                  <span className="pointTick"></span>
-                  <p>Transparent guidance and result driven follow ups</p>
-                </div>
-              </div>
-
-              <div className="aboutActions">
-                <button className="aboutBtn">More About Us</button>
-                <button className="aboutBtn ghost">Explore Treatments</button>
+            <div className="how-note">
+              <div className="how-note-dot" />
+              <div className="how-note-text">
+                Every scan validates the latest blockchain state and shows the full event history instantly.
               </div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-
-
-        <section className="about-section black">
-          <div className="about-container stats-section">
-            <div className="stats-left">
-              <h2 className="section-title white-title">Experience That Matters</h2>
-              <p className="section-text white-text">
-                From everyday concerns to complex cases, our doctors bring
-                strong clinical experience and thoughtful care.
-              </p>
-              <div className="stats-grid">
-                <div className="stat-box">
-                  <h3>6+</h3>
-                  <p>Years Consultant Physician Experience</p>
-                </div>
-                <div className="stat-box">
-                  <h3>1000+</h3>
-                  <p>Patients Supported Across Specialities</p>
-                </div>
-                <div className="stat-box">
-                  <h3>Advanced</h3>
-                  <p>Dermatology & Aesthetic Procedures</p>
-                </div>
-                <div className="stat-box">
-                  <h3>Trusted</h3>
-                  <p>Clear Plans and Safe Treatment</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="stats-right">
-              <div className="icon-row">
-                <img src="/Images/icons8-stethoscope-50.png" alt="Stethoscope" />
-                <img src="/Images/icons8-heart-with-pulse-50.png" alt="Heart" />
-                <img src="/Images/icons8-star-of-life-50.png" alt="Care" />
-                <img src="/Images/icons8-caduceus-100.png" alt="Clinic" />
-              </div>
-              <div className="stats-card">
-                <h3>We keep it simple</h3>
-                <p>
-                  Understand your concern, diagnose carefully, explain clearly,
-                  treat safely.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-
-
-
-
-
-        <section className="about-section white">
-          <div className="about-container values-section">
-            <h2 className="section-title center">What We Stand For</h2>
-            <p className="section-text center">
-              Strong values, consistent care, and results you can trust.
+      <section className="how-section how-alt">
+        <div className="how-wrap">
+          <div className="how-section-head">
+            <h2 className="how-h2">Project Hosting</h2>
+            <p className="how-sub">
+              Fast delivery, strong security, and scalable infrastructure for all three layers.
             </p>
+          </div>
 
-            <div className="values-grid">
-              <div className="value-card">
-                <h3>Clarity</h3>
-                <p>We explain the real cause and the best approach.</p>
+          <div className="how-cards-3">
+            <div className="how-card">
+              <div className="how-card-top">
+                <div className="how-icon how-icon-blue" />
+                <div className="how-card-title">Frontend</div>
               </div>
-              <div className="value-card">
-                <h3>Safety</h3>
-                <p>Procedures and medicines with proper guidance.</p>
+              <div className="how-card-desc">Hosted on Vercel with fast global delivery.</div>
+              <div className="how-card-pill">React</div>
+            </div>
+
+            <div className="how-card">
+              <div className="how-card-top">
+                <div className="how-icon how-icon-purple" />
+                <div className="how-card-title">Backend</div>
               </div>
-              <div className="value-card">
-                <h3>Consistency</h3>
-                <p>Follow-ups that keep your recovery on track.</p>
+              <div className="how-card-desc">Optional Node.js + Express API for data and access control.</div>
+              <div className="how-card-pill how-pill-purple">JWT</div>
+            </div>
+
+            <div className="how-card">
+              <div className="how-card-top">
+                <div className="how-icon how-icon-mix" />
+                <div className="how-card-title">Blockchain</div>
               </div>
-              <div className="value-card">
-                <h3>Respect</h3>
-                <p>Your concerns are always treated seriously.</p>
-              </div>
+              <div className="how-card-desc">Ethereum network, smart contracts in Solidity.</div>
+              <div className="how-card-pill how-pill-blue">Solidity</div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="about-section black">
-          <div className="about-container timeline-section">
-            <h2 className="section-title center white-title">Care Journey</h2>
-            <p className="section-text center white-text">
-              A simple process designed to give you confidence and results.
+      <section className="how-section how-gradient">
+        <div className="how-wrap">
+          <div className="how-section-head invert">
+            <h2 className="how-h2 how-h2-invert">Hashing Algorithm</h2>
+            <p className="how-sub how-sub-invert">
+              Each state becomes a secure fingerprint for the next step in the product journey.
             </p>
+          </div>
 
-            <div className="timeline-grid">
-              <div className="timeline-step">
-                <span className="step-number">01</span>
-                <h3>Consult</h3>
-                <p>We listen carefully and understand your symptoms.</p>
+          <div className="how-grid-2">
+            <div className="how-panel how-panel-glass">
+              <div className="how-panel-title how-panel-title-invert">SHA-256 (Used)</div>
+              <div className="how-panel-desc how-panel-desc-invert">
+                Every product update generates a new hash. That hash becomes the next blockchain state.
               </div>
-              <div className="timeline-step">
-                <span className="step-number">02</span>
-                <h3>Diagnose</h3>
-                <p>We identify the root cause and explain it clearly.</p>
-              </div>
-              <div className="timeline-step">
-                <span className="step-number">03</span>
-                <h3>Treat</h3>
-                <p>Safe, modern treatment plans tailored to you.</p>
-              </div>
-              <div className="timeline-step">
-                <span className="step-number">04</span>
-                <h3>Follow-up</h3>
-                <p>Tracking results and improving outcomes over time.</p>
+            </div>
+
+            <div className="how-panel how-panel-glass">
+              <div className="how-panel-title how-panel-title-invert">Advanced Option</div>
+              <div className="how-panel-desc how-panel-desc-invert">
+                If needed, you can move to SHA-3 (Keccak) to match Ethereum style hashing for some flows.
               </div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="about-section white">
-          <div className="about-container why-section">
-            <div className="why-left">
-              <h2 className="section-title">Why Patients Choose Us</h2>
-              <p className="section-text">
-                We focus on correct diagnosis and a clear plan. We treat skin,
-                hair and general medicine concerns with attention and patience.
-              </p>
-              <div className="why-points">
-                <div className="why-point">
-                  <span className="check" />
-                  <p>Experienced doctors with strong clinical background</p>
-                </div>
-                <div className="why-point">
-                  <span className="check" />
-                  <p>Modern dermatology and aesthetic procedures</p>
-                </div>
-                <div className="why-point">
-                  <span className="check" />
-                  <p>Transparent explanations and realistic expectations</p>
-                </div>
-                <div className="why-point">
-                  <span className="check" />
-                  <p>One clinic for skin, hair and internal medicine</p>
+      <section className="how-section how-white">
+        <div className="how-wrap">
+          <div className="how-section-head">
+            <h2 className="how-h2">System Flow</h2>
+            <p className="how-sub">
+              Clear roles, clear events, and every change is recorded permanently.
+            </p>
+          </div>
+
+          <div className="how-steps">
+            <div className="how-step">
+              <div className="how-step-num">1</div>
+              <div className="how-step-body">
+                <div className="how-step-title">Manufacturer</div>
+                <div className="how-step-desc">
+                  Registers the product, stores details, and generates a dynamic QR linked to blockchain state.
                 </div>
               </div>
             </div>
 
-            <div className="why-right">
-              <div className="why-card">
-                <h3>Personalised Treatment</h3>
-                <p>
-                  Every plan is built around your condition, lifestyle, and
-                  goals.
-                </p>
+            <div className="how-step">
+              <div className="how-step-num how-step-num-purple">2</div>
+              <div className="how-step-body">
+                <div className="how-step-title">Seller</div>
+                <div className="how-step-desc">
+                  Accepts updates, handles transfer, and refreshes the QR state as ownership changes.
+                </div>
               </div>
-              <div className="why-card">
-                <h3>Result Focused</h3>
-                <p>
-                  You will always know what is happening and why it matters.
-                </p>
+            </div>
+
+            <div className="how-step">
+              <div className="how-step-num how-step-num-blue">3</div>
+              <div className="how-step-body">
+                <div className="how-step-title">Consumer</div>
+                <div className="how-step-desc">
+                  Scans QR during purchase. The system shows full history and confirms original or duplicate.
+                </div>
               </div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="about-section black">
-          <div className="about-container cta-section">
-            <div className="cta-box">
-              <h2>Ready to Start Your Care?</h2>
-              <p>
-                Whether it is skin, hair, or general medicine, we are here to
-                help you feel better and look better with safe, proven care.
-              </p>
-              <a href="/contact" className="cta-button">
-                Book an Appointment
-              </a>
+      <section className="how-section how-soft-purple">
+        <div className="how-wrap">
+          <div className="how-section-head invert">
+            <h2 className="how-h2 how-h2-invert">Consumer (Home Page)</h2>
+            <p className="how-sub how-sub-invert">Simple actions designed for real users at purchase time.</p>
+          </div>
+
+          <div className="how-list">
+            <div className="how-list-item">Login leads to login page</div>
+            <div className="how-list-item">Register leads to register page</div>
+            <div className="how-list-item">Verify Product opens QR code scanner</div>
+          </div>
+        </div>
+      </section>
+
+      <section className="how-section how-alt">
+        <div className="how-wrap">
+          <div className="how-section-head">
+            <h2 className="how-h2">Login Page</h2>
+            <p className="how-sub">Role-based access for controlled product updates and approvals.</p>
+          </div>
+
+          <div className="how-cards-2">
+            <div className="how-card">
+              <div className="how-card-top">
+                <div className="how-icon how-icon-blue" />
+                <div className="how-card-title">Manufacturer or Seller</div>
+              </div>
+              <div className="how-card-desc">Login leads to their respective dashboards and actions.</div>
+              <div className="how-card-pill">Role Based</div>
+            </div>
+
+            <div className="how-card">
+              <div className="how-card-top">
+                <div className="how-icon how-icon-purple" />
+                <div className="how-card-title">Regulator (Admin)</div>
+              </div>
+              <div className="how-card-desc">Use default username and password set by admin.</div>
+              <div className="how-card-pill how-pill-purple">Admin</div>
             </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
-      <Footer />
-    </>
+      <section className="how-section how-gradient-2">
+        <div className="how-wrap">
+          <div className="how-section-head invert">
+            <h2 className="how-h2 how-h2-invert">Register Page</h2>
+            <p className="how-sub how-sub-invert">
+              Trusted onboarding, regulator approval, and a clean verification pipeline.
+            </p>
+          </div>
+
+          <div className="how-grid-2">
+            <div className="how-panel how-panel-glass">
+              <div className="how-panel-title how-panel-title-invert">Submit Request</div>
+              <div className="how-panel-desc how-panel-desc-invert">
+                Registration details from manufacturer and seller go to the regulator for approval.
+              </div>
+            </div>
+
+            <div className="how-panel how-panel-glass">
+              <div className="how-panel-title how-panel-title-invert">Verification</div>
+              <div className="how-panel-desc how-panel-desc-invert">
+                Regulator validates documents and enables trusted participation in the network.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="how-section how-white">
+        <div className="how-wrap">
+          <div className="how-section-head">
+            <h2 className="how-h2">Pages Overview</h2>
+            <p className="how-sub">Everything you need, neatly separated by role and responsibility.</p>
+          </div>
+
+          <div className="how-cards-3">
+            <div className="how-card">
+              <div className="how-card-top">
+                <div className="how-icon how-icon-blue" />
+                <div className="how-card-title">Seller</div>
+              </div>
+              <div className="how-card-desc">
+                Dashboard shows overview. Products lists manufacturer goods. Transfer updates ownership to consumer.
+              </div>
+              <div className="how-card-pill">Transfer</div>
+            </div>
+
+            <div className="how-card">
+              <div className="how-card-top">
+                <div className="how-icon how-icon-mix" />
+                <div className="how-card-title">Manufacturer</div>
+              </div>
+              <div className="how-card-desc">
+                Dashboard shows stats. Add Product generates QR for download. Transfer ownership to verified seller.
+              </div>
+              <div className="how-card-pill how-pill-blue">QR</div>
+            </div>
+
+            <div className="how-card">
+              <div className="how-card-top">
+                <div className="how-icon how-icon-purple" />
+                <div className="how-card-title">Regulator</div>
+              </div>
+              <div className="how-card-desc">Dashboard shows stats. Requests allow accept or reject after verification.</div>
+              <div className="how-card-pill how-pill-purple">Approve</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="how-footer">
+        <div className="how-wrap how-foot-inner">
+          <div className="how-foot-left">Fake Product Identification</div>
+          <div className="how-foot-right">White • Blue • Purple</div>
+        </div>
+      </section>
+    </div>
   );
-};
+}
 
 export default About;

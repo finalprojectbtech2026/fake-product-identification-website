@@ -7,6 +7,8 @@ import Services from "./pages/Services";
 import Manufacturer from "./pages/Manufacturer";
 import Seller from "./pages/Seller";
 import Customer from "./pages/Customer";
+import Regulator from "./pages/Regulator";
+import AuthModal from "./pages/AuthModal";
 
 function App() {
   return (
@@ -19,6 +21,8 @@ function App() {
         <Route path="/manufacturer" element={<Manufacturer />} />
         <Route path="/seller" element={<Seller />} />
         <Route path="/customer" element={<Customer />} />
+        <Route path="/regulator" element={<Regulator />} />
+        <Route path="/auth" element={<AuthModal />} />
       </Routes>
     </Router>
   );

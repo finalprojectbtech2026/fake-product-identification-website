@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
 import Navbar from "./Navbar";
 import "./Manufacturer.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
+
+const normalize = (v) => String(v || "").trim();
 
 function Manufacturer() {
   const navigate = useNavigate();
@@ -49,14 +51,6 @@ function Manufacturer() {
 
   const isAuthed = Boolean(authToken);
   const isManufacturer = (me?.role || authUser?.role || "").toLowerCase() === "manufacturer";
-
-  const safeJson = (v) => {
-    try {
-      return JSON.stringify(v);
-    } catch {
-      return "";
-    }
-  };
 
   const showToast = (msg) => {
     setToast(msg);
@@ -138,15 +132,21 @@ function Manufacturer() {
     return true;
   };
 
-  const normalizeCode = (v) => String(v || "").trim();
-  const normalizeText = (v) => String(v || "").trim();
+  const safeJson = (v) => {
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return "";
+    }
+  };
 
   const canUpload = Boolean(certFile) && !certUploading;
+
   const canRegister =
     !registering &&
-    normalizeCode(productCode) &&
-    normalizeText(name) &&
-    (!certFile || (certUploadRes?.ipfs_cid && certUploadRes?.file_sha256));
+    Boolean(normalize(productCode)) &&
+    Boolean(normalize(name)) &&
+    (!certFile || Boolean(certUploadRes?.ipfs_cid && certUploadRes?.file_sha256));
 
   const resetAll = () => {
     setProductCode("");
@@ -207,14 +207,17 @@ function Manufacturer() {
     setHistoryRes(null);
 
     try {
-      const pc = normalizeCode(productCode);
-      const nm = normalizeText(name);
-      const bt = normalizeText(batch) || null;
+      const pc = normalize(productCode);
+      const nm = normalize(name);
+      const bt = normalize(batch) || null;
 
       const meta = {};
-      if (normalizeText(brand)) meta.brand = normalizeText(brand);
+      const b = normalize(brand);
+      const n = normalize(notes);
+
+      if (b) meta.brand = b;
       if (certUploadRes?.file_sha256) meta.certificate_sha256 = certUploadRes.file_sha256;
-      if (normalizeText(notes)) meta.notes = normalizeText(notes);
+      if (n) meta.notes = n;
 
       const body = {
         product_code: pc,
@@ -222,7 +225,7 @@ function Manufacturer() {
         batch: bt,
         ipfs_cid: certUploadRes?.ipfs_cid || null,
         meta_json: meta,
-        nfc_uid: normalizeText(nfcUid) || ""
+        nfc_uid: normalize(nfcUid) || ""
       };
 
       const data = await apiFetch("/api/products", {
@@ -255,7 +258,7 @@ function Manufacturer() {
     if (!qrPng) return;
     const a = document.createElement("a");
     a.href = qrPng;
-    a.download = `${normalizeCode(productCode) || "product"}-qr.png`;
+    a.download = `${normalize(productCode) || "product"}-qr.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -286,7 +289,7 @@ function Manufacturer() {
   };
 
   const loadHistory = async () => {
-    const pc = normalizeCode(productCode);
+    const pc = normalize(productCode);
     if (!pc) return setError("Enter product code to load history.");
     setHistoryLoading(true);
     setHistoryRes(null);
@@ -309,6 +312,8 @@ function Manufacturer() {
       <div className="m-v">{String(v ?? "")}</div>
     </div>
   );
+
+  const events = Array.isArray(historyRes?.events) ? historyRes.events : [];
 
   return (
     <div className="m-shell">
@@ -369,13 +374,7 @@ function Manufacturer() {
             <div className="m-session-left">
               <div className="m-session-title">Session</div>
               <div className="m-session-sub">
-                {meLoading
-                  ? "Loading..."
-                  : isAuthed
-                    ? me
-                      ? `${me.email} (${me.role})`
-                      : "Token present, unable to fetch /me"
-                    : "Not logged in"}
+                {meLoading ? "Loading..." : isAuthed ? (me ? `${me.email} (${me.role})` : "Token present, unable to fetch /me") : "Not logged in"}
               </div>
             </div>
             <div className="m-session-right">
@@ -548,9 +547,7 @@ function Manufacturer() {
                           <div className="m-payload">{registerRes.qr?.qr_payload || ""}</div>
                           <div className="m-hint">Customer scan sends productId + stateHash to /api/products/scan.</div>
                         </div>
-                        <div className="m-qrr">
-                          {qrPng ? <img className="m-qrimg" src={qrPng} alt="qr" /> : <div className="m-qrplaceholder">QR preview</div>}
-                        </div>
+                        <div className="m-qrr">{qrPng ? <img className="m-qrimg" src={qrPng} alt="qr" /> : <div className="m-qrplaceholder">QR preview</div>}</div>
                       </div>
                     </div>
 
@@ -606,7 +603,7 @@ function Manufacturer() {
                   <div className="m-events">
                     <div className="m-subhead">Events</div>
                     <div className="m-events-list">
-                      {(historyRes.events || []).map((ev) => (
+                      {events.map((ev) => (
                         <div className="m-ev" key={ev.id}>
                           <div className="m-ev-top">
                             <div className="m-ev-type">{ev.event_type}</div>
@@ -638,7 +635,7 @@ function Manufacturer() {
                           </div>
                         </div>
                       ))}
-                      {!historyRes.events?.length ? <div className="m-empty">No events found.</div> : null}
+                      {events.length === 0 ? <div className="m-empty">No events found.</div> : null}
                     </div>
                   </div>
                 </div>

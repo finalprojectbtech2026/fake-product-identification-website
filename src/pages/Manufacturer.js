@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
 import Navbar from "./Navbar";
 import "./Manufacturer.css";
@@ -36,14 +36,14 @@ function Manufacturer() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
 
-  const authToken = useMemo(() => localStorage.getItem("auth_token") || "", []);
-  const authUser = useMemo(() => {
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem("auth_token") || "");
+  const [authUser, setAuthUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("auth_user") || "null");
     } catch {
       return null;
     }
-  }, []);
+  });
 
   const fileInputRef = useRef(null);
 
@@ -64,18 +64,21 @@ function Manufacturer() {
     showToast._t = window.setTimeout(() => setToast(""), 2200);
   };
 
-  const apiFetch = async (path, opts = {}) => {
-    const headers = { ...(opts.headers || {}) };
-    if (opts.auth !== false && authToken) headers.Authorization = `Bearer ${authToken}`;
-    const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const m = data?.message || `Request failed (${res.status})`;
-      const e = data?.error ? `: ${data.error}` : "";
-      throw new Error(m + e);
-    }
-    return data;
-  };
+  const apiFetch = useCallback(
+    async (path, opts = {}) => {
+      const headers = { ...(opts.headers || {}) };
+      if (opts.auth !== false && authToken) headers.Authorization = `Bearer ${authToken}`;
+      const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const m = data?.message || `Request failed (${res.status})`;
+        const e = data?.error ? `: ${data.error}` : "";
+        throw new Error(m + e);
+      }
+      return data;
+    },
+    [authToken]
+  );
 
   useEffect(() => {
     const run = async () => {
@@ -96,7 +99,7 @@ function Manufacturer() {
       }
     };
     run();
-  }, [isAuthed]);
+  }, [isAuthed, apiFetch]);
 
   useEffect(() => {
     const make = async () => {
@@ -118,6 +121,8 @@ function Manufacturer() {
   const logout = () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
+    setAuthToken("");
+    setAuthUser(null);
     navigate("/");
   };
 
@@ -324,7 +329,6 @@ function Manufacturer() {
         </div>
 
         <div className="m-right">
-
           <button className="m-logout" type="button" onClick={logout}>
             Logout
           </button>

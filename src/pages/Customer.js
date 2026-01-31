@@ -1,10 +1,11 @@
-// D:\fpi\frontend\src\pages\Customer.js
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Navbar from "./Navbar";
 import "./Customer.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
+
+const normalize = (v) => String(v || "").trim();
 
 function Customer() {
   const navigate = useNavigate();
@@ -35,9 +36,7 @@ function Customer() {
     return data;
   };
 
-  const normalize = (v) => String(v || "").trim();
-
-  const parseQrPayload = () => {
+  const parsedFromQr = useMemo(() => {
     const raw = normalize(qrPayload);
     if (!raw) return null;
     try {
@@ -50,15 +49,14 @@ function Customer() {
     } catch {
       return null;
     }
-  };
+  }, [qrPayload]);
 
   useEffect(() => {
-    const parsed = parseQrPayload();
-    if (parsed) {
-      setProductId(parsed.productId);
-      setStateHash(parsed.stateHash);
+    if (parsedFromQr) {
+      setProductId(parsedFromQr.productId);
+      setStateHash(parsedFromQr.stateHash);
     }
-  }, [qrPayload]);
+  }, [parsedFromQr]);
 
   const scanVerify = async () => {
     const pid = normalize(productId);
@@ -126,13 +124,16 @@ function Customer() {
           <div className="c-badge">C</div>
           <div>
             <div className="c-title">Customer Verification</div>
-            <div className="c-subtitle">Scan QR or paste payload to verify authenticity with blockchain + IPFS hash</div>
+            <div className="c-subtitle">
+              Scan QR or paste payload to verify authenticity with blockchain + IPFS hash
+            </div>
           </div>
         </div>
 
         <div className="c-nav">
-          
-          <button className="c-logout" type="button" onClick={() => navigate("/")}>Back</button>
+          <button className="c-logout" type="button" onClick={() => navigate("/")}>
+            Back
+          </button>
         </div>
       </header>
 
@@ -236,10 +237,20 @@ function Customer() {
                 <button className="c-btn ghost" type="button" onClick={() => copyText(ipfsCid)} disabled={!ipfsCid}>
                   Copy CID
                 </button>
-                <button className="c-btn ghost" type="button" onClick={() => copyText(product?.cloud_hash)} disabled={!product?.cloud_hash}>
+                <button
+                  className="c-btn ghost"
+                  type="button"
+                  onClick={() => copyText(product?.cloud_hash)}
+                  disabled={!product?.cloud_hash}
+                >
                   Copy Cloud Hash
                 </button>
-                <a className={`c-btn link ${ipfsUrl ? "" : "disabled"}`} href={ipfsUrl || "#"} target="_blank" rel="noreferrer">
+                <a
+                  className={`c-btn link ${ipfsUrl ? "" : "disabled"}`}
+                  href={ipfsUrl || "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   Open IPFS File
                 </a>
               </div>

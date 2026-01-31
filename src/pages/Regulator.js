@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "./Navbar";
 import "./Regulator.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
+
+const normalize = (v) => String(v || "").trim();
 
 function Regulator() {
   const navigate = useNavigate();
@@ -20,14 +22,14 @@ function Regulator() {
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
 
-  const authToken = useMemo(() => localStorage.getItem("auth_token") || "", []);
-  const authUser = useMemo(() => {
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem("auth_token") || "");
+  const [authUser, setAuthUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("auth_user") || "null");
     } catch {
       return null;
     }
-  }, []);
+  });
 
   const isAuthed = Boolean(authToken);
   const isRegulator = (me?.role || authUser?.role || "").toLowerCase() === "regulator";
@@ -38,22 +40,23 @@ function Regulator() {
     showToast._t = window.setTimeout(() => setToast(""), 2200);
   };
 
-  const normalize = (v) => String(v || "").trim();
+  const apiFetch = useCallback(
+    async (path, opts = {}) => {
+      const headers = { ...(opts.headers || {}) };
+      if (opts.auth !== false && authToken) headers.Authorization = `Bearer ${authToken}`;
+      const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const m = data?.message || `Request failed (${res.status})`;
+        const e = data?.error ? `: ${data.error}` : "";
+        throw new Error(m + e);
+      }
+      return data;
+    },
+    [authToken]
+  );
 
-  const apiFetch = async (path, opts = {}) => {
-    const headers = { ...(opts.headers || {}) };
-    if (opts.auth !== false && authToken) headers.Authorization = `Bearer ${authToken}`;
-    const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const m = data?.message || `Request failed (${res.status})`;
-      const e = data?.error ? `: ${data.error}` : "";
-      throw new Error(m + e);
-    }
-    return data;
-  };
-
-  const parseQrPayload = () => {
+  const parsedFromQr = useMemo(() => {
     const raw = normalize(qrPayload);
     if (!raw) return null;
     try {
@@ -66,7 +69,7 @@ function Regulator() {
     } catch {
       return null;
     }
-  };
+  }, [qrPayload]);
 
   useEffect(() => {
     const run = async () => {
@@ -87,15 +90,14 @@ function Regulator() {
       }
     };
     run();
-  }, [isAuthed]);
+  }, [isAuthed, apiFetch]);
 
   useEffect(() => {
-    const parsed = parseQrPayload();
-    if (parsed) {
-      setProductId(parsed.productId);
-      setStateHash(parsed.stateHash);
+    if (parsedFromQr) {
+      setProductId(parsedFromQr.productId);
+      setStateHash(parsedFromQr.stateHash);
     }
-  }, [qrPayload]);
+  }, [parsedFromQr]);
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -107,6 +109,8 @@ function Regulator() {
   const logout = () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
+    setAuthToken("");
+    setAuthUser(null);
     navigate("/");
   };
 
@@ -185,10 +189,9 @@ function Regulator() {
         </div>
 
         <div className="r-nav">
-          <Link className="r-link" to="/">Home</Link>
-          <Link className="r-link" to="/about">About</Link>
-          <Link className="r-link" to="/verify">Verify Product</Link>
-          <button className="r-logout" type="button" onClick={logout}>Logout</button>
+          <button className="r-logout" type="button" onClick={logout}>
+            Logout
+          </button>
         </div>
       </header>
 
@@ -206,9 +209,7 @@ function Regulator() {
               </button>
             ) : null}
 
-            {isAuthed && !isRegulator ? (
-              <div className="r-error">Please login with a regulator account.</div>
-            ) : null}
+            {isAuthed && !isRegulator ? <div className="r-error">Please login with a regulator account.</div> : null}
           </div>
 
           <div className="r-panel">
@@ -247,15 +248,25 @@ function Regulator() {
 
             {verdict ? (
               <div className="r-verdict">
-                <div className={`r-pill ${verdict.isAuthentic ? "ok" : "bad"}`}>
-                  {verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}
-                </div>
+                <div className={`r-pill ${verdict.isAuthentic ? "ok" : "bad"}`}>{verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}</div>
 
                 <div className="r-kv">
-                  <div className="r-kv-row"><span>isLatestDbState</span><span>{String(verdict.isLatestDbState)}</span></div>
-                  <div className="r-kv-row"><span>dbCloudHashMatches</span><span>{String(verdict.dbCloudHashMatches)}</span></div>
-                  <div className="r-kv-row"><span>chainCloudHashMatches</span><span>{String(verdict.chainCloudHashMatches)}</span></div>
-                  <div className="r-kv-row"><span>message</span><span>{verdict.message}</span></div>
+                  <div className="r-kv-row">
+                    <span>isLatestDbState</span>
+                    <span>{String(verdict.isLatestDbState)}</span>
+                  </div>
+                  <div className="r-kv-row">
+                    <span>dbCloudHashMatches</span>
+                    <span>{String(verdict.dbCloudHashMatches)}</span>
+                  </div>
+                  <div className="r-kv-row">
+                    <span>chainCloudHashMatches</span>
+                    <span>{String(verdict.chainCloudHashMatches)}</span>
+                  </div>
+                  <div className="r-kv-row">
+                    <span>message</span>
+                    <span>{verdict.message}</span>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -266,9 +277,18 @@ function Regulator() {
             <div className="r-panel-sub">Regulator can verify attached certificate/image is unchanged</div>
 
             <div className="r-kv">
-              <div className="r-kv-row"><span>ipfs_cid</span><span className="mono">{ipfsCid || "-"}</span></div>
-              <div className="r-kv-row"><span>cloud_hash (DB)</span><span className="mono">{product?.cloud_hash || "-"}</span></div>
-              <div className="r-kv-row"><span>certificate_sha256</span><span className="mono">{certificateSha || "-"}</span></div>
+              <div className="r-kv-row">
+                <span>ipfs_cid</span>
+                <span className="mono">{ipfsCid || "-"}</span>
+              </div>
+              <div className="r-kv-row">
+                <span>cloud_hash (DB)</span>
+                <span className="mono">{product?.cloud_hash || "-"}</span>
+              </div>
+              <div className="r-kv-row">
+                <span>certificate_sha256</span>
+                <span className="mono">{certificateSha || "-"}</span>
+              </div>
             </div>
 
             <div className="r-actions">
@@ -290,11 +310,26 @@ function Regulator() {
           <div className="r-panel-sub">Contract view for the product</div>
 
           <div className="r-kv">
-            <div className="r-kv-row"><span>exists</span><span>{chain ? String(chain.exists) : "-"}</span></div>
-            <div className="r-kv-row"><span>manufacturer</span><span className="mono">{chain?.manufacturer || "-"}</span></div>
-            <div className="r-kv-row"><span>currentOwner</span><span className="mono">{chain?.currentOwner || "-"}</span></div>
-            <div className="r-kv-row"><span>cloudHash (chain)</span><span className="mono">{chain?.cloudHash || "-"}</span></div>
-            <div className="r-kv-row"><span>nfcUidHash (chain)</span><span className="mono">{chain?.nfcUidHash || "-"}</span></div>
+            <div className="r-kv-row">
+              <span>exists</span>
+              <span>{chain ? String(chain.exists) : "-"}</span>
+            </div>
+            <div className="r-kv-row">
+              <span>manufacturer</span>
+              <span className="mono">{chain?.manufacturer || "-"}</span>
+            </div>
+            <div className="r-kv-row">
+              <span>currentOwner</span>
+              <span className="mono">{chain?.currentOwner || "-"}</span>
+            </div>
+            <div className="r-kv-row">
+              <span>cloudHash (chain)</span>
+              <span className="mono">{chain?.cloudHash || "-"}</span>
+            </div>
+            <div className="r-kv-row">
+              <span>nfcUidHash (chain)</span>
+              <span className="mono">{chain?.nfcUidHash || "-"}</span>
+            </div>
           </div>
         </section>
 
@@ -317,10 +352,22 @@ function Regulator() {
                       <span>actor</span>
                       <span>{e.actor_email ? `${e.actor_email} (${e.actor_role || "-"})` : e.actor_id}</span>
                     </div>
-                    <div className="r-kv-row"><span>prev_state_hash</span><span className="mono">{e.prev_state_hash || "-"}</span></div>
-                    <div className="r-kv-row"><span>new_state_hash</span><span className="mono">{e.new_state_hash || "-"}</span></div>
-                    <div className="r-kv-row"><span>chain_tx_hash</span><span className="mono">{e.chain_tx_hash || "-"}</span></div>
-                    <div className="r-kv-row"><span>notes</span><span>{e.notes || "-"}</span></div>
+                    <div className="r-kv-row">
+                      <span>prev_state_hash</span>
+                      <span className="mono">{e.prev_state_hash || "-"}</span>
+                    </div>
+                    <div className="r-kv-row">
+                      <span>new_state_hash</span>
+                      <span className="mono">{e.new_state_hash || "-"}</span>
+                    </div>
+                    <div className="r-kv-row">
+                      <span>chain_tx_hash</span>
+                      <span className="mono">{e.chain_tx_hash || "-"}</span>
+                    </div>
+                    <div className="r-kv-row">
+                      <span>notes</span>
+                      <span>{e.notes || "-"}</span>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { FaSearch, FaLock, FaShieldAlt, FaBolt } from "react-icons/fa";
+import { FaLock, FaShieldAlt, FaBolt } from "react-icons/fa";
 import Navbar from "./Navbar";
 import "./Admin.css";
 
@@ -41,12 +41,10 @@ function Admin() {
             </h1>
 
             <p className="hero-desc">
-              Scan QR codes to instantly confirm geniune products through a secure and ta,per-proof blockchain network.
+              Scan QR codes to instantly confirm genuine products through a secure and tamper-proof blockchain network.
             </p>
 
             <div className="hero-actions">
-              
-
               <button
                 type="button"
                 className="hero-btn secondary"
@@ -63,8 +61,6 @@ function Admin() {
           </div>
         </div>
       </section>
-
-
 
       <section className="sec2">
         <div className="sec2-inner">
@@ -83,8 +79,8 @@ function Admin() {
                 <FaShieldAlt />
               </div>
               <div className="sec2-text">
-                <div className="sec2-title">Temper-proof records</div>
-                <div className="sec2-sub">Cannote be altered</div>
+                <div className="sec2-title">Tamper-proof Records</div>
+                <div className="sec2-sub">Cannot be altered</div>
               </div>
             </div>
             <div className="sec2-card">
@@ -100,26 +96,25 @@ function Admin() {
         </div>
       </section>
 
-
       <section className="sec3">
         <div className="sec3-inner">
           <h2 className="sec3-title">How it Works</h2>
           <p className="sec3-sub">
-            Secure Tracking from factory to consumer in three simple steps.
+            Secure tracking from factory to consumer in three simple steps.
           </p>
 
           <div className="sec3-steps">
             <div className="sec3-step">
               <div className="sec3-num">1</div>
-              <div className="sec3-head">Register product</div>
+              <div className="sec3-head">Register Product</div>
               <div className="sec3-desc">
-                Manufacturer registers authentic product details on the block chain.
+                Manufacturer registers authentic product details on the blockchain.
               </div>
             </div>
 
             <div className="sec3-step">
               <div className="sec3-num">2</div>
-              <div className="sec3-head">Generate Qr</div>
+              <div className="sec3-head">Generate QR</div>
               <div className="sec3-desc">
                 Smart contract generates a unique, secure QR code for packaging.
               </div>
@@ -127,16 +122,14 @@ function Admin() {
 
             <div className="sec3-step">
               <div className="sec3-num">3</div>
-              <div className="sec3-head">Scan &amp; Verify</div>
+              <div className="sec3-head">Scan & Verify</div>
               <div className="sec3-desc">
-                Consumer scans the QR code to instanly verify authenticity.
+                Consumer scans the QR code to instantly verify authenticity.
               </div>
             </div>
           </div>
         </div>
       </section>
-
-
     </div>
   );
 }

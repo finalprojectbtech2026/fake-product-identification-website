@@ -45,14 +45,7 @@ function Admin() {
             </p>
 
             <div className="hero-actions">
-              <button
-                type="button"
-                className="hero-btn primary"
-                onClick={() => navigate("/verify")}
-              >
-                <FaSearch />
-                Verify Product
-              </button>
+              
 
               <button
                 type="button"

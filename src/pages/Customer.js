@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "./Navbar";
 import "./Customer.css";
@@ -20,13 +20,13 @@ function Customer() {
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
     setToast(msg);
     window.clearTimeout(showToast._t);
     showToast._t = window.setTimeout(() => setToast(""), 2200);
-  };
+  }, []);
 
-  const apiFetch = async (path, opts = {}) => {
+  const apiFetch = useCallback(async (path, opts = {}) => {
     const res = await fetch(`${API_BASE}${path}`, opts);
     const data = await res.json().catch(() => null);
     if (!res.ok) {
@@ -35,7 +35,7 @@ function Customer() {
       throw new Error(m + e);
     }
     return data;
-  };
+  }, []);
 
   const parsedFromQr = useMemo(() => {
     const raw = normalize(qrPayload);
@@ -69,55 +69,61 @@ function Customer() {
     }
   }, [parsedFromQr]);
 
-  const scanVerify = async (overridePid, overrideSh) => {
-    const pid = normalize(overridePid ?? productId);
-    const sh = normalize(overrideSh ?? stateHash);
-    if (!pid || !sh) {
-      setError("Enter productId and stateHash (or paste QR payload).");
-      return;
-    }
-    setError("");
-    setLoading(true);
-    setResData(null);
-    try {
-      const data = await apiFetch("/api/products/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: pid, stateHash: sh })
-      });
-      setResData(data);
-      showToast("Verification completed");
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const scanVerify = useCallback(
+    async (overridePid, overrideSh) => {
+      const pid = normalize(overridePid ?? productId);
+      const sh = normalize(overrideSh ?? stateHash);
+      if (!pid || !sh) {
+        setError("Enter productId and stateHash (or paste QR payload).");
+        return;
+      }
+      setError("");
+      setLoading(true);
+      setResData(null);
+      try {
+        const data = await apiFetch("/api/products/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: pid, stateHash: sh })
+        });
+        setResData(data);
+        showToast("Verification completed");
+      } catch (e) {
+        setError(String(e?.message || e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiFetch, productId, stateHash, showToast]
+  );
 
   useEffect(() => {
     const pid = normalize(searchParams.get("productId"));
     const sh = normalize(searchParams.get("stateHash"));
     if (pid && sh) scanVerify(pid, sh);
-  }, [searchParams]);
+  }, [searchParams, scanVerify]);
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     setQrPayload("");
     setProductId("");
     setStateHash("");
     setResData(null);
     setError("");
-  };
+  }, []);
 
-  const copyText = async (text) => {
-    const t = normalize(text);
-    if (!t) return;
-    try {
-      await navigator.clipboard.writeText(t);
-      showToast("Copied");
-    } catch {
-      setError("Copy failed. Please copy manually.");
-    }
-  };
+  const copyText = useCallback(
+    async (text) => {
+      const t = normalize(text);
+      if (!t) return;
+      try {
+        await navigator.clipboard.writeText(t);
+        showToast("Copied");
+      } catch {
+        setError("Copy failed. Please copy manually.");
+      }
+    },
+    [showToast]
+  );
 
   const verdict = resData?.verdict || null;
   const product = resData?.product || null;
@@ -169,11 +175,23 @@ function Customer() {
             <div className="c-split">
               <div className="c-field">
                 <div className="c-label">productId</div>
-                <input className="c-input mono" value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="P2001" disabled={loading} />
+                <input
+                  className="c-input mono"
+                  value={productId}
+                  onChange={(e) => setProductId(e.target.value)}
+                  placeholder="P2001"
+                  disabled={loading}
+                />
               </div>
               <div className="c-field">
                 <div className="c-label">stateHash</div>
-                <input className="c-input mono" value={stateHash} onChange={(e) => setStateHash(e.target.value)} placeholder="a46a..." disabled={loading} />
+                <input
+                  className="c-input mono"
+                  value={stateHash}
+                  onChange={(e) => setStateHash(e.target.value)}
+                  placeholder="a46a..."
+                  disabled={loading}
+                />
               </div>
             </div>
 

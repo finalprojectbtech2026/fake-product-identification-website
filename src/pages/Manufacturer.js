@@ -5,6 +5,7 @@ import Navbar from "./Navbar";
 import "./Manufacturer.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
+const WEB_BASE = "https://fake-product-identification-website.vercel.app";
 
 const normalize = (v) => String(v || "").trim();
 
@@ -95,6 +96,13 @@ function Manufacturer() {
     run();
   }, [isAuthed, apiFetch]);
 
+  const buildQrUrl = (productId, stateHash) => {
+    const u = new URL(`${WEB_BASE}/scan`);
+    u.searchParams.set("productId", String(productId || ""));
+    u.searchParams.set("stateHash", String(stateHash || ""));
+    return u.toString();
+  };
+
   useEffect(() => {
     const make = async () => {
       const payload = registerRes?.qr?.qr_payload || "";
@@ -103,7 +111,9 @@ function Manufacturer() {
         return;
       }
       try {
-        const png = await QRCode.toDataURL(payload, { errorCorrectionLevel: "M", margin: 2, scale: 8 });
+        const parsed = JSON.parse(payload);
+        const url = buildQrUrl(parsed?.productId, parsed?.stateHash);
+        const png = await QRCode.toDataURL(url, { errorCorrectionLevel: "M", margin: 2, scale: 8 });
         setQrPng(png);
       } catch {
         setQrPng("");
@@ -234,7 +244,20 @@ function Manufacturer() {
         body: safeJson(body)
       });
 
-      setRegisterRes(data);
+      const pid = data?.qr?.productId || pc;
+      const sh = data?.product?.current_state_hash || "";
+      const qrPayload = safeJson({ productId: pid, stateHash: sh });
+
+      const next = {
+        ...data,
+        qr: {
+          ...(data.qr || {}),
+          qr_payload: qrPayload,
+          qr_url: buildQrUrl(pid, sh)
+        }
+      };
+
+      setRegisterRes(next);
       showToast("Product registered (DB + Blockchain)");
     } catch (e) {
       setError(String(e?.message || e));
@@ -244,11 +267,11 @@ function Manufacturer() {
   };
 
   const copyQrPayload = async () => {
-    const payload = registerRes?.qr?.qr_payload || "";
+    const payload = registerRes?.qr?.qr_url || registerRes?.qr?.qr_payload || "";
     if (!payload) return;
     try {
       await navigator.clipboard.writeText(payload);
-      showToast("QR payload copied");
+      showToast("QR content copied");
     } catch {
       setError("Copy failed. Please copy manually from the payload box.");
     }
@@ -286,6 +309,12 @@ function Manufacturer() {
     } finally {
       setScanLoading(false);
     }
+  };
+
+  const openQrLink = () => {
+    const url = registerRes?.qr?.qr_url || "";
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const loadHistory = async () => {
@@ -347,13 +376,11 @@ function Manufacturer() {
               <span className="m-dot" />
               IPFS + Blockchain Hash Verification
             </div>
-            <div className="m-chip ghost">Dynamic QR (Product ID + State Hash)</div>
+            <div className="m-chip ghost">Dynamic QR (Opens Scan Page)</div>
           </div>
 
           <h1 className="m-hero-title">Register, generate QR, verify authenticity</h1>
-          <p className="m-hero-desc">
-            Large files go to IPFS. Only CID + hashes are used for verification. QR changes whenever state changes, so old QR reuse can be detected.
-          </p>
+          <p className="m-hero-desc">Large files go to IPFS. Only CID + hashes are used for verification. QR changes whenever state changes, so old QR reuse can be detected.</p>
 
           <div className="m-hero-cards">
             <div className="m-mini">
@@ -373,17 +400,9 @@ function Manufacturer() {
           <div className="m-session">
             <div className="m-session-left">
               <div className="m-session-title">Session</div>
-              <div className="m-session-sub">
-                {meLoading ? "Loading..." : isAuthed ? (me ? `${me.email} (${me.role})` : "Token present, unable to fetch /me") : "Not logged in"}
-              </div>
+              <div className="m-session-sub">{meLoading ? "Loading..." : isAuthed ? (me ? `${me.email} (${me.role})` : "Token present, unable to fetch /me") : "Not logged in"}</div>
             </div>
-            <div className="m-session-right">
-              {!isAuthed ? (
-                <button className="m-btn ghost" type="button" onClick={() => navigate("/auth")}>
-                  Go to Login
-                </button>
-              ) : null}
-            </div>
+            <div className="m-session-right">{!isAuthed ? <button className="m-btn ghost" type="button" onClick={() => navigate("/auth")}>Go to Login</button> : null}</div>
           </div>
         </section>
 
@@ -531,10 +550,13 @@ function Manufacturer() {
                         <div className="m-subhead">Dynamic QR</div>
                         <div className="m-qrbtns">
                           <button className="m-btn small" type="button" onClick={copyQrPayload}>
-                            Copy payload
+                            Copy link
                           </button>
                           <button className="m-btn small ghost" type="button" onClick={downloadQr} disabled={!qrPng}>
                             Download QR
+                          </button>
+                          <button className="m-btn small ghost" type="button" onClick={openQrLink} disabled={!registerRes?.qr?.qr_url}>
+                            Open link
                           </button>
                           <button className="m-btn small ghost" type="button" onClick={verifyByScan} disabled={scanLoading}>
                             {scanLoading ? "Verifying..." : "Verify now"}
@@ -544,8 +566,9 @@ function Manufacturer() {
 
                       <div className="m-qrgrid">
                         <div className="m-qrl">
+                          <div className="m-payload">{registerRes.qr?.qr_url || ""}</div>
+                          <div className="m-hint">Camera scan opens the scan page link. The scan page should call /api/products/scan.</div>
                           <div className="m-payload">{registerRes.qr?.qr_payload || ""}</div>
-                          <div className="m-hint">Customer scan sends productId + stateHash to /api/products/scan.</div>
                         </div>
                         <div className="m-qrr">{qrPng ? <img className="m-qrimg" src={qrPng} alt="qr" /> : <div className="m-qrplaceholder">QR preview</div>}</div>
                       </div>
@@ -555,9 +578,7 @@ function Manufacturer() {
                       <div className="m-verify">
                         <div className="m-verify-head">
                           <div className="m-subhead">Verification (Scan API)</div>
-                          <div className={`m-badge2 ${scanRes?.verdict?.isAuthentic ? "ok" : "bad"}`}>
-                            {scanRes?.verdict?.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}
-                          </div>
+                          <div className={`m-badge2 ${scanRes?.verdict?.isAuthentic ? "ok" : "bad"}`}>{scanRes?.verdict?.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}</div>
                         </div>
                         <div className="m-kvgrid">
                           {renderKeyValue("isAuthentic", scanRes?.verdict?.isAuthentic)}
@@ -667,7 +688,7 @@ function Manufacturer() {
 
               <div className="m-spec-block">
                 <div className="m-spec-head">QR rule</div>
-                <div className="m-spec-row">QR = productId + stateHash</div>
+                <div className="m-spec-row">QR opens scan page</div>
                 <div className="m-spec-row">State changes on transfer</div>
               </div>
 
@@ -680,7 +701,7 @@ function Manufacturer() {
 
             <div className="m-proof">
               <div className="m-proof-title">One-click demo flow</div>
-              <div className="m-proof-sub">Upload certificate, register product, copy QR payload, then verify using Scan API.</div>
+              <div className="m-proof-sub">Upload certificate, register product, scan QR using phone camera, scan page verifies authenticity.</div>
 
               <div className="m-proof-box">
                 <div className="m-proof-line">
@@ -693,11 +714,11 @@ function Manufacturer() {
                 </div>
                 <div className="m-proof-line">
                   <span className="m-proof-k">3</span>
-                  <span className="m-proof-v">QR contains state hash</span>
+                  <span className="m-proof-v">QR opens scan page link</span>
                 </div>
                 <div className="m-proof-line">
                   <span className="m-proof-k">4</span>
-                  <span className="m-proof-v">Scan validates authenticity</span>
+                  <span className="m-proof-v">Scan page calls /api/products/scan</span>
                 </div>
               </div>
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "./Navbar";
 import "./Customer.css";
 
@@ -9,6 +9,7 @@ const normalize = (v) => String(v || "").trim();
 
 function Customer() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [qrPayload, setQrPayload] = useState("");
   const [productId, setProductId] = useState("");
@@ -52,15 +53,25 @@ function Customer() {
   }, [qrPayload]);
 
   useEffect(() => {
+    const pid = normalize(searchParams.get("productId"));
+    const sh = normalize(searchParams.get("stateHash"));
+    if (pid && sh) {
+      setProductId(pid);
+      setStateHash(sh);
+      setQrPayload("");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (parsedFromQr) {
       setProductId(parsedFromQr.productId);
       setStateHash(parsedFromQr.stateHash);
     }
   }, [parsedFromQr]);
 
-  const scanVerify = async () => {
-    const pid = normalize(productId);
-    const sh = normalize(stateHash);
+  const scanVerify = async (overridePid, overrideSh) => {
+    const pid = normalize(overridePid ?? productId);
+    const sh = normalize(overrideSh ?? stateHash);
     if (!pid || !sh) {
       setError("Enter productId and stateHash (or paste QR payload).");
       return;
@@ -82,6 +93,12 @@ function Customer() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const pid = normalize(searchParams.get("productId"));
+    const sh = normalize(searchParams.get("stateHash"));
+    if (pid && sh) scanVerify(pid, sh);
+  }, [searchParams]);
 
   const clearAll = () => {
     setQrPayload("");
@@ -124,9 +141,7 @@ function Customer() {
           <div className="c-badge">C</div>
           <div>
             <div className="c-title">Customer Verification</div>
-            <div className="c-subtitle">
-              Scan QR or paste payload to verify authenticity with blockchain + IPFS hash
-            </div>
+            <div className="c-subtitle">Scan QR or paste payload to verify authenticity with blockchain + IPFS hash</div>
           </div>
         </div>
 
@@ -154,28 +169,16 @@ function Customer() {
             <div className="c-split">
               <div className="c-field">
                 <div className="c-label">productId</div>
-                <input
-                  className="c-input mono"
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  placeholder="P2001"
-                  disabled={loading}
-                />
+                <input className="c-input mono" value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="P2001" disabled={loading} />
               </div>
               <div className="c-field">
                 <div className="c-label">stateHash</div>
-                <input
-                  className="c-input mono"
-                  value={stateHash}
-                  onChange={(e) => setStateHash(e.target.value)}
-                  placeholder="a46a..."
-                  disabled={loading}
-                />
+                <input className="c-input mono" value={stateHash} onChange={(e) => setStateHash(e.target.value)} placeholder="a46a..." disabled={loading} />
               </div>
             </div>
 
             <div className="c-actions">
-              <button className="c-btn" type="button" onClick={scanVerify} disabled={loading}>
+              <button className="c-btn" type="button" onClick={() => scanVerify()} disabled={loading}>
                 {loading ? "Verifying..." : "Verify Product"}
               </button>
               <button className="c-btn ghost" type="button" onClick={clearAll} disabled={loading}>
@@ -187,9 +190,7 @@ function Customer() {
 
             {verdict ? (
               <div className="c-verdict">
-                <div className={`c-pill ${verdict.isAuthentic ? "ok" : "bad"}`}>
-                  {verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}
-                </div>
+                <div className={`c-pill ${verdict.isAuthentic ? "ok" : "bad"}`}>{verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}</div>
 
                 <div className="c-kv">
                   <div className="c-kv-row">
@@ -237,20 +238,10 @@ function Customer() {
                 <button className="c-btn ghost" type="button" onClick={() => copyText(ipfsCid)} disabled={!ipfsCid}>
                   Copy CID
                 </button>
-                <button
-                  className="c-btn ghost"
-                  type="button"
-                  onClick={() => copyText(product?.cloud_hash)}
-                  disabled={!product?.cloud_hash}
-                >
+                <button className="c-btn ghost" type="button" onClick={() => copyText(product?.cloud_hash)} disabled={!product?.cloud_hash}>
                   Copy Cloud Hash
                 </button>
-                <a
-                  className={`c-btn link ${ipfsUrl ? "" : "disabled"}`}
-                  href={ipfsUrl || "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a className={`c-btn link ${ipfsUrl ? "" : "disabled"}`} href={ipfsUrl || "#"} target="_blank" rel="noreferrer">
                   Open IPFS File
                 </a>
               </div>

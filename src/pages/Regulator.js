@@ -1,3 +1,4 @@
+// D:\fpi\frontend\src\pages\Regulator.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./Navbar";
@@ -13,15 +14,6 @@ function Regulator() {
   const [me, setMe] = useState(null);
   const [meLoading, setMeLoading] = useState(true);
 
-  const [qrPayload, setQrPayload] = useState("");
-  const [productId, setProductId] = useState("");
-  const [stateHash, setStateHash] = useState("");
-
-  const [loading, setLoading] = useState(false);
-  const [resData, setResData] = useState(null);
-  const [toast, setToast] = useState("");
-  const [error, setError] = useState("");
-
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("auth_token") || "");
   const [authUser, setAuthUser] = useState(() => {
     try {
@@ -33,6 +25,17 @@ function Regulator() {
 
   const isAuthed = Boolean(authToken);
   const isRegulator = (me?.role || authUser?.role || "").toLowerCase() === "regulator";
+
+  const [toast, setToast] = useState("");
+  const [error, setError] = useState("");
+
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [selectedCode, setSelectedCode] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanRes, setScanRes] = useState(null);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -56,21 +59,6 @@ function Regulator() {
     [authToken]
   );
 
-  const parsedFromQr = useMemo(() => {
-    const raw = normalize(qrPayload);
-    if (!raw) return null;
-    try {
-      const obj = JSON.parse(raw);
-      if (!obj || typeof obj !== "object") return null;
-      const pid = normalize(obj.productId);
-      const sh = normalize(obj.stateHash);
-      if (!pid || !sh) return null;
-      return { productId: pid, stateHash: sh };
-    } catch {
-      return null;
-    }
-  }, [qrPayload]);
-
   useEffect(() => {
     const run = async () => {
       setMeLoading(true);
@@ -93,17 +81,8 @@ function Regulator() {
   }, [isAuthed, apiFetch]);
 
   useEffect(() => {
-    if (parsedFromQr) {
-      setProductId(parsedFromQr.productId);
-      setStateHash(parsedFromQr.stateHash);
-    }
-  }, [parsedFromQr]);
-
-  useEffect(() => {
     if (!isAuthed) return;
-    if (!meLoading && (me || authUser) && !isRegulator) {
-      setError("Please login as Regulator to use this portal.");
-    }
+    if (!meLoading && (me || authUser) && !isRegulator) setError("Please login as Regulator to use this portal.");
   }, [isAuthed, meLoading, me, authUser, isRegulator]);
 
   const logout = () => {
@@ -114,42 +93,46 @@ function Regulator() {
     navigate("/");
   };
 
-  const scanVerify = async () => {
-    const pid = normalize(productId);
-    const sh = normalize(stateHash);
-
-    if (!pid || !sh) {
-      setError("Enter productId and stateHash (or paste QR payload).");
-      return;
-    }
-
+  const loadProducts = useCallback(async () => {
+    if (!isAuthed) return;
+    setProductsLoading(true);
     setError("");
-    setLoading(true);
-    setResData(null);
-
     try {
-      const data = await apiFetch("/api/products/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        auth: false,
-        body: JSON.stringify({ productId: pid, stateHash: sh })
-      });
-      setResData(data);
-      showToast("Audit scan completed");
+      const data = await apiFetch("/api/products", { method: "GET" });
+      const rows = Array.isArray(data?.products) ? data.products : [];
+      setProducts(rows);
+      if (!selectedCode && rows.length) setSelectedCode(rows[0].product_code);
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
-      setLoading(false);
+      setProductsLoading(false);
     }
-  };
+  }, [apiFetch, isAuthed, selectedCode]);
 
-  const clearAll = () => {
-    setQrPayload("");
-    setProductId("");
-    setStateHash("");
-    setResData(null);
-    setError("");
-  };
+  useEffect(() => {
+    if (!isAuthed || !isRegulator) return;
+    loadProducts();
+  }, [isAuthed, isRegulator, loadProducts]);
+
+  const selected = useMemo(() => {
+    const code = normalize(selectedCode);
+    return products.find((p) => normalize(p.product_code) === code) || null;
+  }, [products, selectedCode]);
+
+  const ipfsUrl = useMemo(() => {
+    const cid = normalize(selected?.ipfs_cid);
+    return cid ? `https://gateway.pinata.cloud/ipfs/${cid}` : "";
+  }, [selected]);
+
+  const certificateSha = useMemo(() => {
+    const v = selected?.meta_json?.certificate_sha256;
+    return typeof v === "string" ? v : "";
+  }, [selected]);
+
+  const brand = useMemo(() => {
+    const v = selected?.meta_json?.brand;
+    return typeof v === "string" ? v : "";
+  }, [selected]);
 
   const copyText = async (text) => {
     const t = normalize(text);
@@ -162,226 +145,279 @@ function Regulator() {
     }
   };
 
-  const verdict = resData?.verdict || null;
-  const product = resData?.product || null;
-  const chain = resData?.chain || null;
-  const events = Array.isArray(resData?.events) ? resData.events : [];
+  const runScanForSelected = async () => {
+    if (!selected) return;
+    const pid = normalize(selected.product_code);
+    const sh = normalize(selected.current_state_hash);
+    if (!pid || !sh) return setError("Missing productId or stateHash for this product.");
+    setError("");
+    setScanLoading(true);
+    setScanRes(null);
+    try {
+      const data = await apiFetch("/api/products/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        auth: false,
+        body: JSON.stringify({ productId: pid, stateHash: sh })
+      });
+      setScanRes(data);
+      showToast("Verification completed");
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setScanLoading(false);
+    }
+  };
 
-  const ipfsCid = product?.ipfs_cid || "";
-  const ipfsUrl = ipfsCid ? `https://gateway.pinata.cloud/ipfs/${ipfsCid}` : "";
+  const auditDecision = async (productCode, decision) => {
+    const pc = normalize(productCode);
+    if (!pc) return;
+    if (!isRegulator) return setError("Please login as Regulator to use this portal.");
+    setError("");
+    setActionLoading(true);
+    try {
+      await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision })
+      });
+      showToast(decision === "ACCEPT" ? "Accepted as original" : "Marked as duplicate");
+      await loadProducts();
+      if (normalize(selectedCode) === pc) setScanRes(null);
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
-  const certificateSha = useMemo(() => {
-    const v = product?.meta_json?.certificate_sha256;
-    return typeof v === "string" ? v : "";
-  }, [product]);
+  const pillClass = (p) => {
+    const t = normalize(p?.audit_status).toUpperCase();
+    if (t === "ACCEPT") return "ok";
+    if (t === "REJECT") return "bad";
+    return "neutral";
+  };
+
+  const pillText = (p) => {
+    const t = normalize(p?.audit_status).toUpperCase();
+    if (t === "ACCEPT") return "ACCEPTED";
+    if (t === "REJECT") return "REJECTED";
+    return "PENDING";
+  };
+
+  const short = (v, n = 10) => {
+    const s = normalize(v);
+    if (!s) return "-";
+    if (s.length <= n * 2 + 3) return s;
+    return `${s.slice(0, n)}...${s.slice(-n)}`;
+  };
 
   return (
     <div className="r-shell">
       <Navbar />
 
       <header className="r-header">
-        <div className="r-left">
-          <div className="r-badge">R</div>
-          <div>
-            <div className="r-title">Regulator Audit Portal</div>
-            <div className="r-subtitle">Independent verification using blockchain record + cloud hash integrity</div>
+        <div className="r-head-left">
+          <div className="r-mark">Regulator</div>
+          <div className="r-head-text">
+            <div className="r-title">Audit & Verification</div>
+            <div className="r-subtitle">Verify documents, verify authenticity, then accept or reject the product</div>
           </div>
         </div>
 
-        <div className="r-nav">
-          <button className="r-logout" type="button" onClick={logout}>
-            Logout
-          </button>
+        <div className="r-head-right">
+          {!isAuthed ? (
+            <button className="r-btn ghost" type="button" onClick={() => navigate("/auth")}>
+              Go to Login
+            </button>
+          ) : (
+            <>
+              <div className="r-session">
+                {meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}
+              </div>
+              <button className="r-btn ghost" type="button" onClick={logout}>
+                Logout
+              </button>
+            </>
+          )}
         </div>
       </header>
 
       <main className="r-main">
-        <section className="r-topgrid">
-          <div className="r-panel">
-            <div className="r-panel-head">Session</div>
-            <div className="r-panel-sub">
-              {meLoading ? "Loading..." : isAuthed ? (me ? `${me.email} (${me.role})` : "Token present, unable to fetch /me") : "Not logged in"}
+        {error ? <div className="r-alert">{error}</div> : null}
+
+        <section className="r-grid">
+          <div className="r-card">
+            <div className="r-card-head">
+              <div className="r-card-title">Products</div>
+              <button className="r-btn ghost" type="button" onClick={loadProducts} disabled={productsLoading || !isRegulator}>
+                {productsLoading ? "Refreshing..." : "Refresh"}
+              </button>
             </div>
 
-            {!isAuthed ? (
-              <button className="r-btn ghost" type="button" onClick={() => navigate("/auth")}>
-                Go to Login
-              </button>
-            ) : null}
+            <div className="r-table-wrap">
+              <table className="r-table">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Batch</th>
+                    <th>Status</th>
+                    <th className="ta-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((p) => {
+                    const active = normalize(p.product_code) === normalize(selectedCode);
+                    return (
+                      <tr key={p.product_code} className={active ? "active" : ""} onClick={() => setSelectedCode(p.product_code)}>
+                        <td className="mono">{p.product_code}</td>
+                        <td>{p.name || "-"}</td>
+                        <td>{p.batch || "-"}</td>
+                        <td>
+                          <span className={`r-pill ${pillClass(p)}`}>{pillText(p)}</span>
+                        </td>
+                        <td className="ta-right">
+                          <div className="r-row-actions" onClick={(e) => e.stopPropagation()}>
+                            <button className="r-btn small" type="button" onClick={() => setSelectedCode(p.product_code)}>
+                              View
+                            </button>
+                            <button className="r-btn small ghost" type="button" onClick={() => auditDecision(p.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                              Accept
+                            </button>
+                            <button className="r-btn small danger" type="button" onClick={() => auditDecision(p.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-            {isAuthed && !isRegulator ? <div className="r-error">Please login with a regulator account.</div> : null}
+                  {products.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="r-empty">
+                        {productsLoading ? "Loading..." : "No products found"}
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="r-panel">
-            <div className="r-panel-head">Audit Input</div>
-            <div className="r-panel-sub">Paste QR payload or enter productId + stateHash</div>
-
-            <textarea
-              className="r-textarea mono"
-              value={qrPayload}
-              onChange={(e) => setQrPayload(e.target.value)}
-              placeholder='{"productId":"P2001","stateHash":"..."}'
-              disabled={loading}
-            />
-
-            <div className="r-split">
-              <div className="r-field">
-                <div className="r-label">productId</div>
-                <input className="r-input mono" value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="P2001" disabled={loading} />
-              </div>
-              <div className="r-field">
-                <div className="r-label">stateHash</div>
-                <input className="r-input mono" value={stateHash} onChange={(e) => setStateHash(e.target.value)} placeholder="a46a..." disabled={loading} />
-              </div>
+          <div className="r-card">
+            <div className="r-card-head">
+              <div className="r-card-title">Verification</div>
+              <div className="r-card-sub">{selected ? `Selected: ${selected.product_code}` : "Select a product from the table"}</div>
             </div>
 
-            <div className="r-actions">
-              <button className="r-btn" type="button" onClick={scanVerify} disabled={loading || !isRegulator}>
-                {loading ? "Auditing..." : "Run Audit Scan"}
-              </button>
-              <button className="r-btn ghost" type="button" onClick={clearAll} disabled={loading}>
-                Clear
-              </button>
-            </div>
-
-            {error ? <div className="r-error">{error}</div> : null}
-
-            {verdict ? (
-              <div className="r-verdict">
-                <div className={`r-pill ${verdict.isAuthentic ? "ok" : "bad"}`}>{verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}</div>
-
-                <div className="r-kv">
-                  <div className="r-kv-row">
-                    <span>isLatestDbState</span>
-                    <span>{String(verdict.isLatestDbState)}</span>
+            {selected ? (
+              <>
+                <div className="r-section">
+                  <div className="r-section-title">Document check (IPFS)</div>
+                  <div className="r-kv">
+                    <div className="r-kv-row">
+                      <span>ipfs_cid</span>
+                      <span className="mono">{selected.ipfs_cid || "-"}</span>
+                    </div>
+                    <div className="r-kv-row">
+                      <span>certificate_sha256</span>
+                      <span className="mono">{certificateSha || "-"}</span>
+                    </div>
+                    <div className="r-kv-row">
+                      <span>cloud_hash (DB)</span>
+                      <span className="mono">{selected.cloud_hash || "-"}</span>
+                    </div>
                   </div>
-                  <div className="r-kv-row">
-                    <span>dbCloudHashMatches</span>
-                    <span>{String(verdict.dbCloudHashMatches)}</span>
-                  </div>
-                  <div className="r-kv-row">
-                    <span>chainCloudHashMatches</span>
-                    <span>{String(verdict.chainCloudHashMatches)}</span>
-                  </div>
-                  <div className="r-kv-row">
-                    <span>message</span>
-                    <span>{verdict.message}</span>
+
+                  <div className="r-actions">
+                    <button className="r-btn ghost" type="button" onClick={() => copyText(selected.ipfs_cid)} disabled={!selected.ipfs_cid}>
+                      Copy CID
+                    </button>
+                    <button className="r-btn ghost" type="button" onClick={() => copyText(certificateSha)} disabled={!certificateSha}>
+                      Copy Cert Hash
+                    </button>
+                    <a className={`r-btn link ${ipfsUrl ? "" : "disabled"}`} href={ipfsUrl || "#"} target="_blank" rel="noreferrer">
+                      Open IPFS File
+                    </a>
                   </div>
                 </div>
-              </div>
-            ) : null}
-          </div>
 
-          <div className="r-panel">
-            <div className="r-panel-head">Cloud Proof (IPFS)</div>
-            <div className="r-panel-sub">Regulator can verify attached certificate/image is unchanged</div>
-
-            <div className="r-kv">
-              <div className="r-kv-row">
-                <span>ipfs_cid</span>
-                <span className="mono">{ipfsCid || "-"}</span>
-              </div>
-              <div className="r-kv-row">
-                <span>cloud_hash (DB)</span>
-                <span className="mono">{product?.cloud_hash || "-"}</span>
-              </div>
-              <div className="r-kv-row">
-                <span>certificate_sha256</span>
-                <span className="mono">{certificateSha || "-"}</span>
-              </div>
-            </div>
-
-            <div className="r-actions">
-              <button className="r-btn ghost" type="button" onClick={() => copyText(ipfsCid)} disabled={!ipfsCid}>
-                Copy CID
-              </button>
-              <button className="r-btn ghost" type="button" onClick={() => copyText(product?.cloud_hash)} disabled={!product?.cloud_hash}>
-                Copy Cloud Hash
-              </button>
-              <a className={`r-btn link ${ipfsUrl ? "" : "disabled"}`} href={ipfsUrl || "#"} target="_blank" rel="noreferrer">
-                Open IPFS File
-              </a>
-            </div>
-          </div>
-        </section>
-
-        <section className="r-panel">
-          <div className="r-panel-head">On-chain Record</div>
-          <div className="r-panel-sub">Contract view for the product</div>
-
-          <div className="r-kv">
-            <div className="r-kv-row">
-              <span>exists</span>
-              <span>{chain ? String(chain.exists) : "-"}</span>
-            </div>
-            <div className="r-kv-row">
-              <span>manufacturer</span>
-              <span className="mono">{chain?.manufacturer || "-"}</span>
-            </div>
-            <div className="r-kv-row">
-              <span>currentOwner</span>
-              <span className="mono">{chain?.currentOwner || "-"}</span>
-            </div>
-            <div className="r-kv-row">
-              <span>cloudHash (chain)</span>
-              <span className="mono">{chain?.cloudHash || "-"}</span>
-            </div>
-            <div className="r-kv-row">
-              <span>nfcUidHash (chain)</span>
-              <span className="mono">{chain?.nfcUidHash || "-"}</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="r-panel">
-          <div className="r-panel-head">History Timeline</div>
-          <div className="r-panel-sub">Every state change with actor + chain tx</div>
-
-          {events.length === 0 ? (
-            <div className="r-empty">No events</div>
-          ) : (
-            <div className="r-timeline">
-              {events.map((e) => (
-                <div key={e.id} className="r-event">
-                  <div className="r-event-top">
-                    <div className="r-event-type">{e.event_type}</div>
-                    <div className="r-event-time mono">{e.created_at}</div>
-                  </div>
-                  <div className="r-event-kv">
+                <div className="r-section">
+                  <div className="r-section-title">Product check (Blockchain + DB)</div>
+                  <div className="r-kv">
                     <div className="r-kv-row">
-                      <span>actor</span>
-                      <span>{e.actor_email ? `${e.actor_email} (${e.actor_role || "-"})` : e.actor_id}</span>
+                      <span>product_code</span>
+                      <span className="mono">{selected.product_code}</span>
                     </div>
                     <div className="r-kv-row">
-                      <span>prev_state_hash</span>
-                      <span className="mono">{e.prev_state_hash || "-"}</span>
+                      <span>name</span>
+                      <span>{selected.name || "-"}</span>
                     </div>
                     <div className="r-kv-row">
-                      <span>new_state_hash</span>
-                      <span className="mono">{e.new_state_hash || "-"}</span>
+                      <span>brand</span>
+                      <span>{brand || "-"}</span>
                     </div>
                     <div className="r-kv-row">
-                      <span>chain_tx_hash</span>
-                      <span className="mono">{e.chain_tx_hash || "-"}</span>
+                      <span>current_state_hash</span>
+                      <span className="mono">{short(selected.current_state_hash, 12)}</span>
                     </div>
                     <div className="r-kv-row">
-                      <span>notes</span>
-                      <span>{e.notes || "-"}</span>
+                      <span>nfc_uid_hash</span>
+                      <span className="mono">{short(selected.nfc_uid_hash, 12)}</span>
                     </div>
                   </div>
+
+                  <div className="r-actions">
+                    <button className="r-btn" type="button" onClick={runScanForSelected} disabled={scanLoading}>
+                      {scanLoading ? "Verifying..." : "Verify Authenticity"}
+                    </button>
+                    <button className="r-btn ghost" type="button" onClick={() => auditDecision(selected.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                      Accept as Original
+                    </button>
+                    <button className="r-btn danger" type="button" onClick={() => auditDecision(selected.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                      Mark as Duplicate
+                    </button>
+                  </div>
+
+                  {scanRes?.verdict ? (
+                    <div className="r-verdict">
+                      <div className={`r-verdict-pill ${scanRes.verdict.isAuthentic ? "ok" : "bad"}`}>
+                        {scanRes.verdict.isAuthentic ? "AUTHENTIC (HASH MATCH)" : "NOT AUTHENTIC (MISMATCH)"}
+                      </div>
+                      <div className="r-kv tight">
+                        <div className="r-kv-row">
+                          <span>isLatestDbState</span>
+                          <span>{String(scanRes.verdict.isLatestDbState)}</span>
+                        </div>
+                        <div className="r-kv-row">
+                          <span>dbCloudHashMatches</span>
+                          <span>{String(scanRes.verdict.dbCloudHashMatches)}</span>
+                        </div>
+                        <div className="r-kv-row">
+                          <span>chainCloudHashMatches</span>
+                          <span>{String(scanRes.verdict.chainCloudHashMatches)}</span>
+                        </div>
+                        <div className="r-kv-row">
+                          <span>message</span>
+                          <span>{scanRes.verdict.message}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              ))}
-            </div>
-          )}
+              </>
+            ) : (
+              <div className="r-placeholder">Pick a product from the left table to verify documents and authenticity.</div>
+            )}
+          </div>
         </section>
       </main>
 
       <footer className="r-footer">
         <div>© {new Date().getFullYear()} Fake Product Identification</div>
-        <div className="r-footer-right">
-          <span className="r-footer-dot" />
-          Regulator View
-        </div>
+        <div className="r-foot-note">Regulator View</div>
       </footer>
 
       {toast ? <div className="r-toast">{toast}</div> : null}

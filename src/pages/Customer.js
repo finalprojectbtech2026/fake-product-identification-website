@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import Navbar from "./Navbar";
 import "./Customer.css";
 
@@ -8,7 +8,6 @@ const API_BASE = "https://fake-product-identification-backend.vercel.app";
 const normalize = (v) => String(v || "").trim();
 
 function Customer() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [qrPayload, setQrPayload] = useState("");
@@ -142,8 +141,6 @@ function Customer() {
       <div className="cv-noise" />
       <div className="cv-orb cv-orb-1" />
       <div className="cv-orb cv-orb-2" />
-
-      
 
       <main className="cv-main">
         <section className="cv-hero">

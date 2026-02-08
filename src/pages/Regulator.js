@@ -4,7 +4,6 @@ import Navbar from "./Navbar";
 import "./Regulator.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
-
 const normalize = (v) => String(v || "").trim();
 
 function Regulator() {
@@ -25,8 +24,16 @@ function Regulator() {
   const isAuthed = Boolean(authToken);
   const isRegulator = (me?.role || authUser?.role || "").toLowerCase() === "regulator";
 
+  const [activeTab, setActiveTab] = useState("manufacturers");
+
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
+
+  const [manufacturersLoading, setManufacturersLoading] = useState(false);
+  const [manufacturers, setManufacturers] = useState([]);
+  const [selectedManufacturerId, setSelectedManufacturerId] = useState("");
+  const [mActionLoading, setMActionLoading] = useState(false);
+  const [mDecisionReason, setMDecisionReason] = useState("");
 
   const [productsLoading, setProductsLoading] = useState(false);
   const [products, setProducts] = useState([]);
@@ -105,6 +112,206 @@ function Regulator() {
     navigate("/");
   }, [navigate]);
 
+  const renderKeyValue = useCallback(
+    (k, v) => (
+      <div className="r-kv-row" key={k}>
+        <span>{k}</span>
+        <span className={String(v ?? "").startsWith("0x") ? "mono" : ""}>{String(v ?? "-")}</span>
+      </div>
+    ),
+    []
+  );
+
+  const copyText = useCallback(
+    async (text) => {
+      const t = normalize(text);
+      if (!t) return;
+      try {
+        await navigator.clipboard.writeText(t);
+        showToast("Copied");
+      } catch {
+        setError("Copy failed. Please copy manually.");
+      }
+    },
+    [showToast]
+  );
+
+  const short = useCallback((v, n = 10) => {
+    const s = normalize(v);
+    if (!s) return "-";
+    if (s.length <= n * 2 + 3) return s;
+    return `${s.slice(0, n)}...${s.slice(-n)}`;
+  }, []);
+
+  const loadManufacturers = useCallback(async () => {
+    if (!isAuthed || !isRegulator) return;
+    setManufacturersLoading(true);
+    setError("");
+    try {
+      let data = null;
+      try {
+        data = await apiFetch("/api/manufacturers?status=pending", { method: "GET" });
+      } catch {
+        data = await apiFetch("/api/manufacturers/pending", { method: "GET" });
+      }
+
+      const rows =
+        (Array.isArray(data?.manufacturers) && data.manufacturers) ||
+        (Array.isArray(data?.pending) && data.pending) ||
+        (Array.isArray(data) && data) ||
+        [];
+
+      setManufacturers(rows);
+
+      const firstId =
+        rows?.[0]?.id ||
+        rows?.[0]?._id ||
+        rows?.[0]?.manufacturer_id ||
+        rows?.[0]?.manufacturerId ||
+        rows?.[0]?.email ||
+        "";
+
+      if (!selectedManufacturerId && firstId) setSelectedManufacturerId(String(firstId));
+    } catch (e) {
+      setManufacturers([]);
+      setError(String(e?.message || e));
+    } finally {
+      setManufacturersLoading(false);
+    }
+  }, [apiFetch, isAuthed, isRegulator, selectedManufacturerId]);
+
+  const manufacturerIdOf = useCallback((m) => {
+    return (
+      String(m?.id ?? "") ||
+      String(m?._id ?? "") ||
+      String(m?.manufacturer_id ?? "") ||
+      String(m?.manufacturerId ?? "") ||
+      String(m?.email ?? "") ||
+      ""
+    );
+  }, []);
+
+  const selectedManufacturer = useMemo(() => {
+    const sid = normalize(selectedManufacturerId);
+    if (!sid) return null;
+    return (
+      manufacturers.find((m) => normalize(manufacturerIdOf(m)) === sid) ||
+      manufacturers.find((m) => normalize(m?.email) === sid) ||
+      null
+    );
+  }, [manufacturers, manufacturerIdOf, selectedManufacturerId]);
+
+  const manufacturerStatusText = useCallback((m) => {
+    const raw = normalize(m?.status || m?.approval_status || m?.onboarding_status || m?.state);
+    const t = raw.toUpperCase();
+    if (t) return t;
+    return "PENDING";
+  }, []);
+
+  const manufacturerPillClass = useCallback(
+    (m) => {
+      const t = manufacturerStatusText(m);
+      if (t === "APPROVED" || t === "ACCEPT" || t === "ACTIVE") return "ok";
+      if (t === "REJECTED" || t === "REJECT") return "bad";
+      return "neutral";
+    },
+    [manufacturerStatusText]
+  );
+
+  const postManufacturerDecision = useCallback(
+    async (id, decision, reason) => {
+      const rid = normalize(id);
+      if (!rid) throw new Error("Missing manufacturer id");
+      const payload = { decision, reason: normalize(reason) || undefined };
+
+      try {
+        await apiFetch(`/api/manufacturers/${encodeURIComponent(rid)}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: normalize(reason) || undefined })
+        });
+        return;
+      } catch {}
+
+      try {
+        await apiFetch(`/api/manufacturers/${encodeURIComponent(rid)}/reject`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: normalize(reason) || undefined })
+        });
+        return;
+      } catch {}
+
+      await apiFetch(`/api/manufacturers/${encodeURIComponent(rid)}/audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    },
+    [apiFetch]
+  );
+
+  const approveManufacturer = useCallback(async () => {
+    if (!isRegulator) {
+      setError("Please login as Regulator to use this portal.");
+      return;
+    }
+    if (!selectedManufacturer) {
+      setError("Select a manufacturer to approve.");
+      return;
+    }
+    const id = manufacturerIdOf(selectedManufacturer);
+    if (!normalize(id)) {
+      setError("Manufacturer id is missing.");
+      return;
+    }
+    setError("");
+    setMActionLoading(true);
+    try {
+      await postManufacturerDecision(id, "APPROVE", mDecisionReason);
+      showToast("Manufacturer approved");
+      setMDecisionReason("");
+      await loadManufacturers();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setMActionLoading(false);
+    }
+  }, [isRegulator, loadManufacturers, mDecisionReason, manufacturerIdOf, postManufacturerDecision, selectedManufacturer, showToast]);
+
+  const rejectManufacturer = useCallback(async () => {
+    if (!isRegulator) {
+      setError("Please login as Regulator to use this portal.");
+      return;
+    }
+    if (!selectedManufacturer) {
+      setError("Select a manufacturer to reject.");
+      return;
+    }
+    const id = manufacturerIdOf(selectedManufacturer);
+    if (!normalize(id)) {
+      setError("Manufacturer id is missing.");
+      return;
+    }
+    setError("");
+    setMActionLoading(true);
+    try {
+      await postManufacturerDecision(id, "REJECT", mDecisionReason);
+      showToast("Manufacturer rejected");
+      setMDecisionReason("");
+      await loadManufacturers();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setMActionLoading(false);
+    }
+  }, [isRegulator, loadManufacturers, mDecisionReason, manufacturerIdOf, postManufacturerDecision, selectedManufacturer, showToast]);
+
+  useEffect(() => {
+    if (!isAuthed || !isRegulator) return;
+    loadManufacturers();
+  }, [isAuthed, isRegulator, loadManufacturers]);
+
   const loadProducts = useCallback(async () => {
     if (!isAuthed) return;
     setProductsLoading(true);
@@ -150,37 +357,6 @@ function Regulator() {
     const arr = Array.isArray(historyRes?.events) ? historyRes.events : [];
     return arr;
   }, [historyRes]);
-
-  const copyText = useCallback(
-    async (text) => {
-      const t = normalize(text);
-      if (!t) return;
-      try {
-        await navigator.clipboard.writeText(t);
-        showToast("Copied");
-      } catch {
-        setError("Copy failed. Please copy manually.");
-      }
-    },
-    [showToast]
-  );
-
-  const short = useCallback((v, n = 10) => {
-    const s = normalize(v);
-    if (!s) return "-";
-    if (s.length <= n * 2 + 3) return s;
-    return `${s.slice(0, n)}...${s.slice(-n)}`;
-  }, []);
-
-  const renderKeyValue = useCallback(
-    (k, v) => (
-      <div className="r-kv-row" key={k}>
-        <span>{k}</span>
-        <span className={String(v ?? "").startsWith("0x") ? "mono" : ""}>{String(v ?? "-")}</span>
-      </div>
-    ),
-    []
-  );
 
   const runScanForSelected = useCallback(async () => {
     if (!selected) return;
@@ -324,6 +500,61 @@ function Regulator() {
     return normalize(v) || "-";
   }, [scanRes]);
 
+  const manufacturerDetails = useMemo(() => {
+    if (!selectedManufacturer) return [];
+    const m = selectedManufacturer;
+
+    const docsCid =
+      normalize(m?.ipfs_cid) ||
+      normalize(m?.docs_ipfs_cid) ||
+      normalize(m?.documents_ipfs_cid) ||
+      normalize(m?.document_cid) ||
+      normalize(m?.kyc_ipfs_cid) ||
+      "";
+
+    const name = normalize(m?.company_name) || normalize(m?.company) || normalize(m?.name) || normalize(m?.manufacturer_name) || "";
+    const email = normalize(m?.email) || normalize(m?.manufacturer_email) || "";
+    const phone = normalize(m?.phone) || normalize(m?.mobile) || "";
+    const wallet = normalize(m?.wallet_address) || normalize(m?.wallet) || "";
+    const regNo = normalize(m?.registration_no) || normalize(m?.registration_number) || normalize(m?.reg_no) || "";
+    const country = normalize(m?.country) || normalize(m?.location) || "";
+    const createdAt = normalize(m?.created_at) || normalize(m?.createdAt) || "";
+    const status = manufacturerStatusText(m);
+
+    const rows = [
+      ["status", status],
+      ["company", name || "-"],
+      ["email", email || "-"],
+      ["phone", phone || "-"],
+      ["wallet_address", wallet || "-"],
+      ["registration_no", regNo || "-"],
+      ["country", country || "-"],
+      ["created_at", createdAt ? new Date(createdAt).toLocaleString() : "-"]
+    ];
+
+    if (docsCid) rows.push(["documents_ipfs_cid", docsCid]);
+
+    return rows;
+  }, [manufacturerStatusText, selectedManufacturer]);
+
+  const manufacturerDocsUrl = useMemo(() => {
+    const cid =
+      normalize(selectedManufacturer?.ipfs_cid) ||
+      normalize(selectedManufacturer?.docs_ipfs_cid) ||
+      normalize(selectedManufacturer?.documents_ipfs_cid) ||
+      normalize(selectedManufacturer?.document_cid) ||
+      normalize(selectedManufacturer?.kyc_ipfs_cid) ||
+      "";
+    return cid ? `https://gateway.pinata.cloud/ipfs/${cid}` : "";
+  }, [selectedManufacturer]);
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    if (!isRegulator) return;
+    if (activeTab === "manufacturers") loadManufacturers();
+    if (activeTab === "products") loadProducts();
+  }, [activeTab, isAuthed, isRegulator, loadManufacturers, loadProducts]);
+
   return (
     <div className="r-shell">
       <Navbar />
@@ -333,7 +564,7 @@ function Regulator() {
           <div className="r-mark">Regulator</div>
           <div className="r-head-text">
             <div className="r-title">Audit & Verification</div>
-            <div className="r-subtitle">Verify documents, verify authenticity, approve identities, then accept or reject</div>
+            <div className="r-subtitle">Approve manufacturers, then verify products and accept or reject</div>
           </div>
         </div>
 
@@ -356,100 +587,230 @@ function Regulator() {
       <main className="r-main">
         {error ? <div className="r-alert">{error}</div> : null}
 
-        <section className="r-grid">
-          <div className="r-card">
-            <div className="r-card-head">
-              <div className="r-card-title">Products</div>
-              <button className="r-btn ghost" type="button" onClick={loadProducts} disabled={productsLoading || !isRegulator}>
-                {productsLoading ? "Refreshing..." : "Refresh"}
-              </button>
-            </div>
+        <div className="r-tabs">
+          <button
+            className={`r-tab-btn ${activeTab === "manufacturers" ? "active" : ""}`}
+            type="button"
+            onClick={() => setActiveTab("manufacturers")}
+            disabled={!isRegulator}
+          >
+            Manufacturer details
+          </button>
+          <button
+            className={`r-tab-btn ${activeTab === "products" ? "active" : ""}`}
+            type="button"
+            onClick={() => setActiveTab("products")}
+            disabled={!isRegulator}
+          >
+            Products approval
+          </button>
+        </div>
 
-            <div className="r-table-wrap">
-              <table className="r-table">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Batch</th>
-                    <th>Status</th>
-                    <th className="ta-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((p) => {
-                    const active = normalize(p.product_code) === normalize(selectedCode);
-                    return (
-                      <tr key={p.product_code} className={active ? "active" : ""} onClick={() => setSelectedCode(p.product_code)}>
-                        <td className="mono">{p.product_code}</td>
-                        <td>{p.name || "-"}</td>
-                        <td>{p.batch || "-"}</td>
-                        <td>
-                          <span className={`r-pill ${pillClass(p)}`}>{pillText(p)}</span>
-                        </td>
-                        <td className="ta-right">
-                          <div className="r-row-actions" onClick={(e) => e.stopPropagation()}>
-                            <button className="r-btn small" type="button" onClick={() => setSelectedCode(p.product_code)}>
-                              View
-                            </button>
-                            <button
-                              className="r-btn small ghost"
-                              type="button"
-                              onClick={() => auditDecision(p.product_code, "ACCEPT")}
-                              disabled={actionLoading || !isRegulator}
-                            >
-                              Accept
-                            </button>
-                            <button
-                              className="r-btn small danger"
-                              type="button"
-                              onClick={() => auditDecision(p.product_code, "REJECT")}
-                              disabled={actionLoading || !isRegulator}
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {products.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="r-empty">
-                        {productsLoading ? "Loading..." : "No products found"}
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="r-rightcol">
+        {activeTab === "manufacturers" ? (
+          <section className="r-split">
             <div className="r-card">
               <div className="r-card-head">
-                <div className="r-card-title">Verification</div>
-                <div className="r-card-sub">{selected ? `Selected: ${selected.product_code}` : "Select a product from the table"}</div>
+                <div>
+                  <div className="r-card-title">Manufacturer onboarding</div>
+                  <div className="r-card-sub">Approve or reject manufacturer registry requests</div>
+                </div>
+                <button className="r-btn ghost" type="button" onClick={loadManufacturers} disabled={manufacturersLoading || !isRegulator}>
+                  {manufacturersLoading ? "Refreshing..." : "Refresh"}
+                </button>
               </div>
 
-              {selected ? (
-                <>
-                  <div className="r-section">
+              <div className="r-table-wrap">
+                <table className="r-table r-table-compact">
+                  <thead>
+                    <tr>
+                      <th>Company</th>
+                      <th>Email</th>
+                      <th>Wallet</th>
+                      <th>Status</th>
+                      <th className="ta-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manufacturers.map((m) => {
+                      const id = manufacturerIdOf(m);
+                      const active = normalize(id) === normalize(selectedManufacturerId);
+                      const company = normalize(m?.company_name) || normalize(m?.company) || normalize(m?.name) || normalize(m?.manufacturer_name) || "-";
+                      const email = normalize(m?.email) || normalize(m?.manufacturer_email) || "-";
+                      const wallet = normalize(m?.wallet_address) || normalize(m?.wallet) || "-";
+                      return (
+                        <tr key={id || email} className={active ? "active" : ""} onClick={() => setSelectedManufacturerId(id || email)}>
+                          <td>{company}</td>
+                          <td>{email}</td>
+                          <td className="mono">{wallet === "-" ? "-" : short(wallet, 10)}</td>
+                          <td>
+                            <span className={`r-pill ${manufacturerPillClass(m)}`}>{manufacturerStatusText(m)}</span>
+                          </td>
+                          <td className="ta-right">
+                            <div className="r-row-actions" onClick={(e) => e.stopPropagation()}>
+                              <button className="r-btn small" type="button" onClick={() => setSelectedManufacturerId(id || email)}>
+                                View
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {manufacturers.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="r-empty">
+                          {manufacturersLoading ? "Loading..." : "No pending manufacturers"}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="r-card">
+              <div className="r-card-head">
+                <div>
+                  <div className="r-card-title">Review & decision</div>
+                  <div className="r-card-sub">Selected manufacturer details and approval actions</div>
+                </div>
+              </div>
+
+              <div className="r-section">
+                {selectedManufacturer ? (
+                  <>
+                    <div className="r-kv">{manufacturerDetails.map(([k, v]) => renderKeyValue(k, v))}</div>
+
+                    <div className="r-actions">
+                      <button
+                        className="r-btn ghost"
+                        type="button"
+                        onClick={() => copyText(normalize(selectedManufacturer?.wallet_address || selectedManufacturer?.wallet || ""))}
+                        disabled={!normalize(selectedManufacturer?.wallet_address || selectedManufacturer?.wallet || "")}
+                      >
+                        Copy Wallet
+                      </button>
+                      <button
+                        className="r-btn ghost"
+                        type="button"
+                        onClick={() => copyText(normalize(selectedManufacturer?.email || selectedManufacturer?.manufacturer_email || ""))}
+                        disabled={!normalize(selectedManufacturer?.email || selectedManufacturer?.manufacturer_email || "")}
+                      >
+                        Copy Email
+                      </button>
+                      <a className={`r-btn link ${manufacturerDocsUrl ? "" : "disabled"}`} href={manufacturerDocsUrl || "#"} target="_blank" rel="noreferrer">
+                        Open Documents (IPFS)
+                      </a>
+                    </div>
+
+                    <div className="r-field" style={{ marginTop: 12 }}>
+                      <div className="r-field-label">Reason / Notes</div>
+                      <textarea
+                        className="r-textarea"
+                        value={mDecisionReason}
+                        onChange={(e) => setMDecisionReason(e.target.value)}
+                        placeholder="Write reason for approve/reject (optional)"
+                        disabled={mActionLoading || !isRegulator}
+                        rows={4}
+                      />
+                      <div className="r-hint">This will be sent if backend supports it.</div>
+                    </div>
+
+                    <div className="r-actions">
+                      <button className="r-btn ghost" type="button" onClick={approveManufacturer} disabled={mActionLoading || !isRegulator}>
+                        {mActionLoading ? "Saving..." : "Approve manufacturer"}
+                      </button>
+                      <button className="r-btn danger" type="button" onClick={rejectManufacturer} disabled={mActionLoading || !isRegulator}>
+                        {mActionLoading ? "Saving..." : "Reject manufacturer"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="r-empty-block">Select a manufacturer from the table to review and approve/reject.</div>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section className="r-split">
+            <div className="r-card">
+              <div className="r-card-head">
+                <div>
+                  <div className="r-card-title">Products</div>
+                  <div className="r-card-sub">Select a product, then approve or reject</div>
+                </div>
+                <button className="r-btn ghost" type="button" onClick={loadProducts} disabled={productsLoading || !isRegulator}>
+                  {productsLoading ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+
+              <div className="r-table-wrap">
+                <table className="r-table">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Name</th>
+                      <th>Batch</th>
+                      <th>Status</th>
+                      <th className="ta-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((p) => {
+                      const active = normalize(p.product_code) === normalize(selectedCode);
+                      return (
+                        <tr key={p.product_code} className={active ? "active" : ""} onClick={() => setSelectedCode(p.product_code)}>
+                          <td className="mono">{p.product_code}</td>
+                          <td>{p.name || "-"}</td>
+                          <td>{p.batch || "-"}</td>
+                          <td>
+                            <span className={`r-pill ${pillClass(p)}`}>{pillText(p)}</span>
+                          </td>
+                          <td className="ta-right">
+                            <div className="r-row-actions" onClick={(e) => e.stopPropagation()}>
+                              <button className="r-btn small" type="button" onClick={() => setSelectedCode(p.product_code)}>
+                                View
+                              </button>
+                              <button className="r-btn small ghost" type="button" onClick={() => auditDecision(p.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                                Accept
+                              </button>
+                              <button className="r-btn small danger" type="button" onClick={() => auditDecision(p.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                                Reject
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {products.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="r-empty">
+                          {productsLoading ? "Loading..." : "No products found"}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="r-card">
+              <div className="r-card-head">
+                <div>
+                  <div className="r-card-title">Selected product</div>
+                  <div className="r-card-sub">{selected ? `Code: ${selected.product_code}` : "Pick a product from the table"}</div>
+                </div>
+              </div>
+
+              <div className="r-section">
+                {selected ? (
+                  <>
                     <div className="r-section-title">Document check (IPFS)</div>
                     <div className="r-kv">
-                      <div className="r-kv-row">
-                        <span>ipfs_cid</span>
-                        <span className="mono">{selected.ipfs_cid || "-"}</span>
-                      </div>
-                      <div className="r-kv-row">
-                        <span>certificate_sha256</span>
-                        <span className="mono">{certificateSha || "-"}</span>
-                      </div>
-                      <div className="r-kv-row">
-                        <span>cloud_hash (DB)</span>
-                        <span className="mono">{selected.cloud_hash || "-"}</span>
-                      </div>
+                      {renderKeyValue("ipfs_cid", selected.ipfs_cid || "-")}
+                      {renderKeyValue("certificate_sha256", certificateSha || "-")}
+                      {renderKeyValue("cloud_hash (DB)", selected.cloud_hash || "-")}
                     </div>
 
                     <div className="r-actions">
@@ -463,31 +824,16 @@ function Regulator() {
                         Open IPFS File
                       </a>
                     </div>
-                  </div>
 
-                  <div className="r-section">
-                    <div className="r-section-title">Product check (Blockchain + DB)</div>
+                    <div className="r-section-title" style={{ marginTop: 18 }}>
+                      Product check (Blockchain + DB)
+                    </div>
                     <div className="r-kv">
-                      <div className="r-kv-row">
-                        <span>product_code</span>
-                        <span className="mono">{selected.product_code}</span>
-                      </div>
-                      <div className="r-kv-row">
-                        <span>name</span>
-                        <span>{selected.name || "-"}</span>
-                      </div>
-                      <div className="r-kv-row">
-                        <span>brand</span>
-                        <span>{brand || "-"}</span>
-                      </div>
-                      <div className="r-kv-row">
-                        <span>current_state_hash</span>
-                        <span className="mono">{short(selected.current_state_hash, 12)}</span>
-                      </div>
-                      <div className="r-kv-row">
-                        <span>nfc_uid_hash</span>
-                        <span className="mono">{short(selected.nfc_uid_hash, 12)}</span>
-                      </div>
+                      {renderKeyValue("product_code", selected.product_code)}
+                      {renderKeyValue("name", selected.name || "-")}
+                      {renderKeyValue("brand", brand || "-")}
+                      {renderKeyValue("current_state_hash", short(selected.current_state_hash, 12))}
+                      {renderKeyValue("nfc_uid_hash", short(selected.nfc_uid_hash, 12))}
                     </div>
 
                     <div className="r-actions">
@@ -505,29 +851,17 @@ function Regulator() {
                           {scanRes.verdict.isAuthentic ? "AUTHENTIC (HASH MATCH)" : "NOT AUTHENTIC (MISMATCH)"}
                         </div>
                         <div className="r-kv tight">
-                          <div className="r-kv-row">
-                            <span>isLatestDbState</span>
-                            <span>{String(scanRes.verdict.isLatestDbState)}</span>
-                          </div>
-                          <div className="r-kv-row">
-                            <span>dbCloudHashMatches</span>
-                            <span>{String(scanRes.verdict.dbCloudHashMatches)}</span>
-                          </div>
-                          <div className="r-kv-row">
-                            <span>chainCloudHashMatches</span>
-                            <span>{String(scanRes.verdict.chainCloudHashMatches)}</span>
-                          </div>
-                          <div className="r-kv-row">
-                            <span>message</span>
-                            <span>{scanRes.verdict.message}</span>
-                          </div>
+                          {renderKeyValue("isLatestDbState", String(scanRes.verdict.isLatestDbState))}
+                          {renderKeyValue("dbCloudHashMatches", String(scanRes.verdict.dbCloudHashMatches))}
+                          {renderKeyValue("chainCloudHashMatches", String(scanRes.verdict.chainCloudHashMatches))}
+                          {renderKeyValue("message", scanRes.verdict.message || "-")}
                         </div>
                       </div>
                     ) : null}
-                  </div>
 
-                  <div className="r-section">
-                    <div className="r-section-title">Chain evidence</div>
+                    <div className="r-section-title" style={{ marginTop: 18 }}>
+                      Chain evidence
+                    </div>
                     <div className="r-kv">
                       {renderKeyValue("contract_address", chainContractAddress)}
                       {renderKeyValue("register_tx_hash", chainRegisterTx)}
@@ -543,10 +877,10 @@ function Regulator() {
                         Copy Contract
                       </button>
                     </div>
-                  </div>
 
-                  <div className="r-section">
-                    <div className="r-section-title">Audit decision</div>
+                    <div className="r-section-title" style={{ marginTop: 18 }}>
+                      Audit decision
+                    </div>
 
                     <div className="r-field">
                       <div className="r-field-label">Reason / Evidence</div>
@@ -554,7 +888,7 @@ function Regulator() {
                         className="r-textarea"
                         value={auditReason}
                         onChange={(e) => setAuditReason(e.target.value)}
-                        placeholder="Write why you accept or reject (e.g., hash mismatch, missing document, duplicate code)"
+                        placeholder="Write why you accept or reject"
                         disabled={actionLoading || !isRegulator}
                         rows={4}
                       />
@@ -569,10 +903,10 @@ function Regulator() {
                         Mark as Duplicate
                       </button>
                     </div>
-                  </div>
 
-                  <div className="r-section">
-                    <div className="r-section-title">Full history</div>
+                    <div className="r-section-title" style={{ marginTop: 18 }}>
+                      Full history
+                    </div>
 
                     {historyRes ? (
                       <>
@@ -613,14 +947,14 @@ function Regulator() {
                     ) : (
                       <div className="r-empty-block">{historyLoading ? "Loading..." : "No history loaded."}</div>
                     )}
-                  </div>
-                </>
-              ) : (
-                <div className="r-placeholder">Pick a product from the left table to verify documents, authenticity, and history.</div>
-              )}
+                  </>
+                ) : (
+                  <div className="r-placeholder">Pick a product from the table to verify documents, authenticity, and history.</div>
+                )}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
       </main>
 
       <footer className="r-footer">

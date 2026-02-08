@@ -1,16 +1,16 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaIndustry, FaGavel, FaStore, FaUserCheck, FaArrowRight, FaQrcode, FaShieldAlt, FaBolt } from "react-icons/fa";
+import { FaIndustry, FaGavel, FaStore, FaUserCheck, FaArrowRight, FaShieldAlt, FaBolt, FaCheckCircle } from "react-icons/fa";
 import Navbar from "./Navbar";
 import "./AuthModal.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
 
 const roles = [
-  { key: "manufacturer", title: "Manufacturer", icon: FaIndustry },
-  { key: "regulator", title: "Regulator", icon: FaGavel },
-  { key: "seller", title: "Seller", icon: FaStore },
-  { key: "customer", title: "Customer", icon: FaUserCheck }
+  { key: "manufacturer", title: "Manufacturer", icon: FaIndustry, desc: "Register products and publish authenticity proofs." },
+  { key: "seller", title: "Seller", icon: FaStore, desc: "Verify inventory and record supply chain actions." },
+  { key: "regulator", title: "Regulator", icon: FaGavel, desc: "Audit history and compliance signals quickly." },
+  { key: "customer", title: "Customer", icon: FaUserCheck, desc: "Scan and verify a product before purchase." }
 ];
 
 function AuthPage() {
@@ -131,106 +131,105 @@ function AuthPage() {
     }
   };
 
+  const activeRole = useMemo(() => roles.find((r) => r.key === roleKey) || roles[0], [roleKey]);
+
   return (
     <div className="authp-page">
       <Navbar />
 
-      <div className="authp-shell authp-shell-page">
-        <div className="authp-bg" />
-        <div className="authp-grid" />
-        <div className="authp-glow authp-glow-1" />
-        <div className="authp-glow authp-glow-2" />
-
-        <div className="authp-wrap authp-wrap-page">
-          <div className="authp-split">
-            <div className="authp-left">
-              <div className="authp-left-card">
-                <div className="authp-left-kicker">
-                  <FaQrcode />
-                  Secure QR Verification
+      <div className="authx-shell">
+        <div className="authx-bg" />
+        <div className="authx-noise" />
+        <div className="authx-wrap">
+          <div className="authx-card">
+            <div className="authx-head">
+              <div className="authx-brand">
+                <div className="authx-badge">
+                  <FaCheckCircle />
                 </div>
-                <div className="authp-left-title">Login to manage roles and verify products on blockchain.</div>
-                <div className="authp-left-desc">
-                  Select your role, then login or signup. Every product scan can show the full history and authenticity status.
+                <div>
+                  <div className="authx-title">{tab === "login" ? "Welcome back" : "Create your account"}</div>
+                  <div className="authx-sub">Choose your role and continue.</div>
                 </div>
+              </div>
 
-                <div className="authp-left-points">
-                  <div className="authp-point">
-                    <span className="authp-point-ico">
-                      <FaShieldAlt />
-                    </span>
-                    <span className="authp-point-text">Tamper-proof verification flow</span>
-                  </div>
-                  <div className="authp-point">
-                    <span className="authp-point-ico">
-                      <FaBolt />
-                    </span>
-                    <span className="authp-point-text">Instant scan result for customers</span>
-                  </div>
-                </div>
-
-                <button className="authp-left-back" type="button" onClick={() => navigate("/")}>
-                  Back to Home
+              <div className="authx-tabs" role="tablist" aria-label="auth tabs">
+                <button
+                  type="button"
+                  className={`authx-tab ${tab === "login" ? "active" : ""}`}
+                  onClick={() => setTab("login")}
+                  disabled={loading}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  className={`authx-tab ${tab === "signup" ? "active" : ""}`}
+                  onClick={() => setTab("signup")}
+                  disabled={loading}
+                >
+                  Signup
                 </button>
               </div>
             </div>
 
-            <div className="authp-right">
-              <div className="authp-top">
-                <div className="authp-title">{tab === "login" ? "Login" : "Create Account"}</div>
-                <div className="authp-sub">Select your role and continue securely.</div>
-
-                <div className="authp-tabs">
-                  <button
-                    type="button"
-                    className={`authp-tab ${tab === "login" ? "active" : ""}`}
-                    onClick={() => setTab("login")}
-                    disabled={loading}
-                  >
-                    Login
-                  </button>
-                  <button
-                    type="button"
-                    className={`authp-tab ${tab === "signup" ? "active" : ""}`}
-                    onClick={() => setTab("signup")}
-                    disabled={loading}
-                  >
-                    Signup
-                  </button>
-                </div>
+            <div className="authx-body">
+              <div className="authx-roles">
+                {roles.map((r) => {
+                  const Icon = r.icon;
+                  const active = r.key === roleKey;
+                  return (
+                    <button
+                      key={r.key}
+                      type="button"
+                      className={`authx-role ${active ? "active" : ""}`}
+                      onClick={() => setRoleKey(r.key)}
+                      disabled={loading}
+                    >
+                      <div className="authx-role-ico">
+                        <Icon />
+                      </div>
+                      <div className="authx-role-meta">
+                        <div className="authx-role-name">{r.title}</div>
+                        <div className="authx-role-desc">{r.desc}</div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="authp-card">
-                <div className="authp-section-head">
-                  <div className="authp-section-title">Select Role</div>
+              <div className="authx-formwrap">
+                <div className="authx-side">
+                  <div className="authx-side-card">
+                    <div className="authx-side-title">{activeRole.title}</div>
+                    <div className="authx-side-desc">{activeRole.desc}</div>
+
+                    <div className="authx-points">
+                      <div className="authx-point">
+                        <span className="authx-point-ico">
+                          <FaShieldAlt />
+                        </span>
+                        <span className="authx-point-text">Tamper-resistant history checks</span>
+                      </div>
+                      <div className="authx-point">
+                        <span className="authx-point-ico">
+                          <FaBolt />
+                        </span>
+                        <span className="authx-point-text">Fast verification responses</span>
+                      </div>
+                    </div>
+
+                    <button className="authx-back" type="button" onClick={() => navigate("/")} disabled={loading}>
+                      Back to Home
+                    </button>
+                  </div>
                 </div>
 
-                <div className="authp-roles">
-                  {roles.map((r) => {
-                    const Icon = r.icon;
-                    const active = r.key === roleKey;
-                    return (
-                      <button
-                        key={r.key}
-                        type="button"
-                        className={`authp-role ${active ? "active" : ""}`}
-                        onClick={() => setRoleKey(r.key)}
-                        disabled={loading}
-                      >
-                        <div className="authp-role-ico">
-                          <Icon />
-                        </div>
-                        <div className="authp-role-name">{r.title}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <form className="authp-form" onSubmit={onSubmit}>
-                  <div className="authp-field">
-                    <label className="authp-label">Email</label>
+                <form className="authx-form" onSubmit={onSubmit}>
+                  <div className="authx-field">
+                    <label className="authx-label">Email</label>
                     <input
-                      className="authp-input"
+                      className="authx-input"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@example.com"
@@ -240,10 +239,10 @@ function AuthPage() {
                     />
                   </div>
 
-                  <div className="authp-field">
-                    <label className="authp-label">Password</label>
+                  <div className="authx-field">
+                    <label className="authx-label">Password</label>
                     <input
-                      className="authp-input"
+                      className="authx-input"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter password"
@@ -254,10 +253,10 @@ function AuthPage() {
                   </div>
 
                   {tab === "signup" ? (
-                    <div className="authp-field">
-                      <label className="authp-label">Confirm Password</label>
+                    <div className="authx-field">
+                      <label className="authx-label">Confirm Password</label>
                       <input
-                        className="authp-input"
+                        className="authx-input"
                         value={confirm}
                         onChange={(e) => setConfirm(e.target.value)}
                         placeholder="Confirm password"
@@ -268,20 +267,20 @@ function AuthPage() {
                     </div>
                   ) : null}
 
-                  {error ? <div className="authp-error">{error}</div> : null}
+                  {error ? <div className="authx-error">{error}</div> : null}
 
-                  <button className="authp-submit" type="submit" disabled={loading}>
+                  <button className="authx-submit" type="submit" disabled={loading}>
                     <span>{loading ? "Please wait..." : tab === "login" ? "Continue" : "Create Account"}</span>
                     <FaArrowRight />
                   </button>
 
-                  <div className="authp-note">Your login is stored in Neon DB and authenticated using JWT.</div>
+                  <div className="authx-note">Your session is stored securely and verified using JWT.</div>
                 </form>
               </div>
             </div>
           </div>
 
-          <div className="authp-foot-space" />
+          <div className="authx-foot" />
         </div>
       </div>
     </div>

@@ -21,7 +21,7 @@ function App() {
         <Route path="/manufacturer" element={<Manufacturer />} />
         <Route path="/seller" element={<Seller />} />
         <Route path="/customer" element={<Customer />} />
-        <Route path="/scan" element={<Customer />} /> {/* ✅ add this */}
+        <Route path="/scan" element={<Customer />} /> 
         <Route path="/regulator" element={<Regulator />} />
         <Route path="/auth" element={<AuthModal />} />
       </Routes>

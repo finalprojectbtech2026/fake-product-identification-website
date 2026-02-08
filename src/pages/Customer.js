@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { Html5Qrcode } from "html5-qrcode";
 import Navbar from "./Navbar";
 import "./Customer.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
-
 const normalize = (v) => String(v || "").trim();
 
 function Customer() {
@@ -18,6 +18,10 @@ function Customer() {
   const [resData, setResData] = useState(null);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
+
+  const [scannerOn, setScannerOn] = useState(false);
+  const scannerRef = useRef(null);
+  const scannerId = "cv-qr-reader";
 
   const showToast = useCallback((msg) => {
     setToast(msg);
@@ -36,9 +40,19 @@ function Customer() {
     return data;
   }, []);
 
-  const parsedFromQr = useMemo(() => {
-    const raw = normalize(qrPayload);
+  const extractFromText = useCallback((rawText) => {
+    const raw = normalize(rawText);
     if (!raw) return null;
+
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      try {
+        const u = new URL(raw);
+        const pid = normalize(u.searchParams.get("productId"));
+        const sh = normalize(u.searchParams.get("stateHash"));
+        if (pid && sh) return { productId: pid, stateHash: sh };
+      } catch {}
+    }
+
     try {
       const obj = JSON.parse(raw);
       if (!obj || typeof obj !== "object") return null;
@@ -46,10 +60,12 @@ function Customer() {
       const sh = normalize(obj.stateHash);
       if (!pid || !sh) return null;
       return { productId: pid, stateHash: sh };
-    } catch {
-      return null;
-    }
-  }, [qrPayload]);
+    } catch {}
+
+    return null;
+  }, []);
+
+  const parsedFromQr = useMemo(() => extractFromText(qrPayload), [qrPayload, extractFromText]);
 
   useEffect(() => {
     const pid = normalize(searchParams.get("productId"));
@@ -73,7 +89,7 @@ function Customer() {
       const pid = normalize(overridePid ?? productId);
       const sh = normalize(overrideSh ?? stateHash);
       if (!pid || !sh) {
-        setError("Paste QR payload or enter productId and stateHash.");
+        setError("Paste QR payload or link, or enter productId and stateHash.");
         return;
       }
       setError("");
@@ -133,6 +149,61 @@ function Customer() {
     }
   };
 
+  const stopScanner = useCallback(async () => {
+    try {
+      const inst = scannerRef.current;
+      if (inst) {
+        await inst.stop().catch(() => {});
+        await inst.clear().catch(() => {});
+      }
+    } finally {
+      scannerRef.current = null;
+      setScannerOn(false);
+    }
+  }, []);
+
+  const startScanner = useCallback(async () => {
+    setError("");
+    setResData(null);
+
+    if (scannerOn) return;
+
+    const inst = new Html5Qrcode(scannerId);
+    scannerRef.current = inst;
+
+    try {
+      setScannerOn(true);
+      await inst.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 260, height: 260 } },
+        async (decodedText) => {
+          const extracted = extractFromText(decodedText);
+          if (!extracted) {
+            setError("QR scanned, but it did not contain a valid link or payload.");
+            return;
+          }
+          setProductId(extracted.productId);
+          setStateHash(extracted.stateHash);
+          setQrPayload("");
+          showToast("QR scanned");
+          await stopScanner();
+          scanVerify(extracted.productId, extracted.stateHash);
+        },
+        () => {}
+      );
+    } catch (e) {
+      scannerRef.current = null;
+      setScannerOn(false);
+      setError(String(e?.message || e));
+    }
+  }, [scannerOn, extractFromText, stopScanner, scanVerify, showToast]);
+
+  useEffect(() => {
+    return () => {
+      stopScanner();
+    };
+  }, [stopScanner]);
+
   return (
     <div className="cv-shell">
       <Navbar />
@@ -149,23 +220,42 @@ function Customer() {
               <span className="cv-dot" />
               Authenticity check
             </div>
-            <div className="cv-chip ghost">QR payload or link</div>
+            <div className="cv-chip ghost">QR link, QR payload, or camera scan</div>
           </div>
 
           <h1 className="cv-hero-title">Verify your product in seconds</h1>
-          <p className="cv-hero-desc">Paste the QR payload or open the scan link, we will show only the verified product details.</p>
+          <p className="cv-hero-desc">Scan the QR, or paste the QR link/payload. You will see verified product details and history.</p>
         </section>
 
         <section className="cv-grid">
           <div className="cv-panel">
-            <div className="cv-panel-title">Paste QR payload</div>
-            <div className="cv-panel-sub">Format: {"{ productId, stateHash }"}</div>
+            <div className="cv-panel-title">Scan or paste</div>
+            <div className="cv-panel-sub">Supported: URL with productId/stateHash, or JSON payload</div>
+
+            <div className="cv-actions">
+              {!scannerOn ? (
+                <button className="cv-btn" type="button" onClick={startScanner} disabled={loading}>
+                  Scan with camera
+                </button>
+              ) : (
+                <button className="cv-btn ghost" type="button" onClick={stopScanner} disabled={loading}>
+                  Stop camera
+                </button>
+              )}
+              <button className="cv-btn ghost" type="button" onClick={clearAll} disabled={loading}>
+                Clear
+              </button>
+            </div>
+
+            <div className={`cv-scanner ${scannerOn ? "show" : ""}`}>
+              <div id={scannerId} className="cv-scanner-box" />
+            </div>
 
             <textarea
               className="cv-textarea mono"
               value={qrPayload}
               onChange={(e) => setQrPayload(e.target.value)}
-              placeholder='{"productId":"P2001","stateHash":"..."}'
+              placeholder='Paste QR link like https://your-site/customer?productId=P2001&stateHash=... or JSON {"productId":"P2001","stateHash":"..."}'
               disabled={loading}
             />
 
@@ -183,9 +273,6 @@ function Customer() {
             <div className="cv-actions">
               <button className="cv-btn" type="button" onClick={() => scanVerify()} disabled={loading}>
                 {loading ? "Verifying..." : "Verify Product"}
-              </button>
-              <button className="cv-btn ghost" type="button" onClick={clearAll} disabled={loading}>
-                Clear
               </button>
             </div>
 
@@ -218,7 +305,7 @@ function Customer() {
 
           <aside className="cv-panel cv-side">
             <div className="cv-panel-title">Verified product view</div>
-            <div className="cv-panel-sub">Only customer friendly details are shown here</div>
+            <div className="cv-panel-sub">Customer friendly details</div>
 
             <div className="cv-product-card">
               <div className="cv-product-media">
@@ -286,7 +373,7 @@ function Customer() {
 
         <section className="cv-panel">
           <div className="cv-panel-title">History timeline</div>
-          <div className="cv-panel-sub">Shows only actions and timestamps (no technical hashes)</div>
+          <div className="cv-panel-sub">Actions and timestamps</div>
 
           {events.length === 0 ? (
             <div className="cv-empty">No history found</div>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
 import Navbar from "./Navbar";
@@ -14,6 +14,10 @@ function Manufacturer() {
 
   const [me, setMe] = useState(null);
   const [meLoading, setMeLoading] = useState(true);
+
+  const [sellerWallet, setSellerWallet] = useState("");
+  const [sellerVerifying, setSellerVerifying] = useState(false);
+  const [sellerVerifyRes, setSellerVerifyRes] = useState(null);
 
   const [productCode, setProductCode] = useState("");
   const [name, setName] = useState("");
@@ -53,11 +57,11 @@ function Manufacturer() {
   const isAuthed = Boolean(authToken);
   const isManufacturer = (me?.role || authUser?.role || "").toLowerCase() === "manufacturer";
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
     setToast(msg);
     window.clearTimeout(showToast._t);
-    showToast._t = window.setTimeout(() => setToast(""), 2200);
-  };
+    showToast._t = window.setTimeout(() => setToast(""), 2000);
+  }, []);
 
   const apiFetch = useCallback(
     async (path, opts = {}) => {
@@ -96,12 +100,12 @@ function Manufacturer() {
     run();
   }, [isAuthed, apiFetch]);
 
-  const buildQrUrl = (productId, stateHash) => {
+  const buildQrUrl = useCallback((productId, stateHash) => {
     const u = new URL(`${WEB_BASE}/scan`);
     u.searchParams.set("productId", String(productId || ""));
     u.searchParams.set("stateHash", String(stateHash || ""));
     return u.toString();
-  };
+  }, []);
 
   useEffect(() => {
     const make = async () => {
@@ -113,14 +117,14 @@ function Manufacturer() {
       try {
         const parsed = JSON.parse(payload);
         const url = buildQrUrl(parsed?.productId, parsed?.stateHash);
-        const png = await QRCode.toDataURL(url, { errorCorrectionLevel: "M", margin: 2, scale: 8 });
+        const png = await QRCode.toDataURL(url, { errorCorrectionLevel: "M", margin: 2, scale: 7 });
         setQrPng(png);
       } catch {
         setQrPng("");
       }
     };
     make();
-  }, [registerRes]);
+  }, [registerRes, buildQrUrl]);
 
   const logout = () => {
     localStorage.removeItem("auth_token");
@@ -130,7 +134,7 @@ function Manufacturer() {
     navigate("/");
   };
 
-  const guardManufacturer = () => {
+  const guardManufacturer = useCallback(() => {
     if (!isAuthed) {
       navigate("/auth");
       return false;
@@ -140,7 +144,7 @@ function Manufacturer() {
       return false;
     }
     return true;
-  };
+  }, [isAuthed, isManufacturer, navigate]);
 
   const safeJson = (v) => {
     try {
@@ -205,6 +209,28 @@ function Manufacturer() {
       setError(String(e?.message || e));
     } finally {
       setCertUploading(false);
+    }
+  };
+
+  const verifySellerWallet = async () => {
+    if (!guardManufacturer()) return;
+    const w = normalize(sellerWallet);
+    if (!w) return setError("Enter seller wallet address to verify.");
+    setError("");
+    setSellerVerifying(true);
+    setSellerVerifyRes(null);
+    try {
+      const data = await apiFetch("/api/sellers/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: safeJson({ wallet_address: w })
+      });
+      setSellerVerifyRes(data);
+      showToast("Seller wallet verified");
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSellerVerifying(false);
     }
   };
 
@@ -344,6 +370,13 @@ function Manufacturer() {
 
   const events = Array.isArray(historyRes?.events) ? historyRes.events : [];
 
+  const sessionText = useMemo(() => {
+    if (meLoading) return "Loading...";
+    if (!isAuthed) return "Not logged in";
+    if (me?.email) return `${me.email} (${me.role || "user"})`;
+    return "Token present, unable to fetch /me";
+  }, [meLoading, isAuthed, me]);
+
   return (
     <div className="m-shell">
       <Navbar />
@@ -357,9 +390,7 @@ function Manufacturer() {
           <div className="m-badge">M</div>
           <div className="m-headtext">
             <div className="m-title">Manufacturer</div>
-            <div className="m-subtitle">
-              {meLoading ? "Loading..." : isAuthed ? (me ? `${me.email} (${me.role})` : "Logged in") : "Not logged in"}
-            </div>
+            <div className="m-subtitle">{sessionText}</div>
           </div>
         </div>
 
@@ -379,17 +410,56 @@ function Manufacturer() {
       <main className="m-main">
         <section className="m-topcard">
           <div className="m-topcard-left">
-            <div className="m-top-title">Register products and generate QR</div>
-            <div className="m-top-sub">Upload certificate to IPFS, then register. Use QR link to verify.</div>
+            <div className="m-top-title">Manufacturer actions</div>
+            <div className="m-top-sub">Verify seller wallets, upload certificates, register products, and generate QR.</div>
           </div>
           <div className="m-topcard-right">
-            <div className="m-pill">White UI</div>
-            <div className="m-pill ghost">Simple view</div>
+            <div className="m-pill">Portal</div>
+            <div className="m-pill ghost">Manufacturer</div>
           </div>
         </section>
 
         <section className="m-body single">
           <div className="m-leftcol">
+            <div className="m-panel">
+              <div className="m-panel-title">Verify seller wallet</div>
+
+              <div className="m-form">
+                <div className="m-field">
+                  <label className="m-label">Seller wallet address</label>
+                  <input className="m-input mono" value={sellerWallet} onChange={(e) => setSellerWallet(e.target.value)} placeholder="0x..." disabled={sellerVerifying} />
+                  <div className="m-hint">Manufacturer verifies seller wallet before transfers are allowed.</div>
+                </div>
+
+                <div className="m-actions">
+                  <button className="m-btn" type="button" onClick={verifySellerWallet} disabled={sellerVerifying || !isManufacturer}>
+                    {sellerVerifying ? "Verifying..." : "Verify seller"}
+                  </button>
+                  <button
+                    className="m-btn ghost"
+                    type="button"
+                    onClick={() => {
+                      setSellerWallet("");
+                      setSellerVerifyRes(null);
+                    }}
+                    disabled={sellerVerifying}
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                {sellerVerifyRes ? (
+                  <div className="m-result">
+                    <div className="m-result-title">Seller verification result</div>
+                    <div className="m-kvgrid">
+                      {renderKeyValue("wallet_address", sellerVerifyRes.wallet_address)}
+                      {renderKeyValue("chain_tx_hash", sellerVerifyRes.chain_tx_hash)}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
             <div className="m-panel">
               <div className="m-panel-title">Upload certificate</div>
 
@@ -407,7 +477,7 @@ function Manufacturer() {
                     }}
                     disabled={certUploading || registering}
                   />
-                  <div className="m-hint">We store CID + SHA-256 and link it during registration.</div>
+                  <div className="m-hint">Stores CID + SHA-256, and links it during registration.</div>
                 </div>
 
                 <div className="m-actions">

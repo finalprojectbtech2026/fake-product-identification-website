@@ -1,4 +1,3 @@
-// D:\fpi\frontend\src\pages\Regulator.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./Navbar";
@@ -36,6 +35,15 @@ function Regulator() {
 
   const [scanLoading, setScanLoading] = useState(false);
   const [scanRes, setScanRes] = useState(null);
+
+  const [auditReason, setAuditReason] = useState("");
+
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRes, setHistoryRes] = useState(null);
+
+  const [sellerWallet, setSellerWallet] = useState("");
+  const [sellerVerifying, setSellerVerifying] = useState(false);
+  const [sellerVerifyRes, setSellerVerifyRes] = useState(null);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -134,6 +142,11 @@ function Regulator() {
     return typeof v === "string" ? v : "";
   }, [selected]);
 
+  const events = useMemo(() => {
+    const arr = Array.isArray(historyRes?.events) ? historyRes.events : [];
+    return arr;
+  }, [historyRes]);
+
   const copyText = async (text) => {
     const t = normalize(text);
     if (!t) return;
@@ -144,6 +157,20 @@ function Regulator() {
       setError("Copy failed. Please copy manually.");
     }
   };
+
+  const short = (v, n = 10) => {
+    const s = normalize(v);
+    if (!s) return "-";
+    if (s.length <= n * 2 + 3) return s;
+    return `${s.slice(0, n)}...${s.slice(-n)}`;
+  };
+
+  const renderKeyValue = (k, v) => (
+    <div className="r-kv-row" key={k}>
+      <span>{k}</span>
+      <span className={String(v ?? "").startsWith("0x") ? "mono" : ""}>{String(v ?? "-")}</span>
+    </div>
+  );
 
   const runScanForSelected = async () => {
     if (!selected) return;
@@ -169,6 +196,40 @@ function Regulator() {
     }
   };
 
+  const loadHistory = async (code) => {
+    const pc = normalize(code || selectedCode);
+    if (!pc) return;
+    setHistoryLoading(true);
+    setError("");
+    try {
+      const data = await apiFetch(`/api/products/${encodeURIComponent(pc)}/history`, { method: "GET", auth: false });
+      setHistoryRes(data);
+      showToast("History loaded");
+    } catch (e) {
+      setHistoryRes(null);
+      setError(String(e?.message || e));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setScanRes(null);
+    setHistoryRes(null);
+    setAuditReason("");
+    if (!isAuthed || !isRegulator) return;
+    if (!selectedCode) return;
+    loadHistory(selectedCode);
+  }, [selectedCode, isAuthed, isRegulator]);
+
+  const postAudit = async (pc, decision, reason) => {
+    await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision, reason: normalize(reason) || undefined })
+    });
+  };
+
   const auditDecision = async (productCode, decision) => {
     const pc = normalize(productCode);
     if (!pc) return;
@@ -176,14 +237,22 @@ function Regulator() {
     setError("");
     setActionLoading(true);
     try {
-      await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision })
-      });
+      try {
+        await postAudit(pc, decision, auditReason);
+      } catch (e) {
+        await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision })
+        });
+      }
+
       showToast(decision === "ACCEPT" ? "Accepted as original" : "Marked as duplicate");
       await loadProducts();
-      if (normalize(selectedCode) === pc) setScanRes(null);
+      if (normalize(selectedCode) === pc) {
+        setScanRes(null);
+        await loadHistory(pc);
+      }
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
@@ -205,12 +274,52 @@ function Regulator() {
     return "PENDING";
   };
 
-  const short = (v, n = 10) => {
-    const s = normalize(v);
-    if (!s) return "-";
-    if (s.length <= n * 2 + 3) return s;
-    return `${s.slice(0, n)}...${s.slice(-n)}`;
+  const verifySellerWallet = async () => {
+    const wa = normalize(sellerWallet);
+    if (!wa) return setError("Enter seller wallet address to verify.");
+    if (!isRegulator) return setError("Please login as Regulator to use this portal.");
+    setError("");
+    setSellerVerifying(true);
+    setSellerVerifyRes(null);
+    try {
+      const data = await apiFetch("/api/sellers/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_address: wa })
+      });
+      setSellerVerifyRes(data);
+      showToast("Seller wallet verified");
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setSellerVerifying(false);
+    }
   };
+
+  const chainContractAddress = useMemo(() => {
+    const v = scanRes?.chain?.contract_address || scanRes?.chain?.contractAddress || "";
+    return normalize(v) || "-";
+  }, [scanRes]);
+
+  const chainRegisterTx = useMemo(() => {
+    const v =
+      selected?.chain_register_tx_hash ||
+      selected?.chainRegisterTxHash ||
+      scanRes?.chain?.register_tx_hash ||
+      scanRes?.chain?.registerTxHash ||
+      "";
+    return normalize(v) || "-";
+  }, [selected, scanRes]);
+
+  const chainCloudHash = useMemo(() => {
+    const v = scanRes?.chain?.cloud_hash || scanRes?.chain?.cloudHash || "";
+    return normalize(v) || "-";
+  }, [scanRes]);
+
+  const chainNfcHash = useMemo(() => {
+    const v = scanRes?.chain?.nfc_uid_hash || scanRes?.chain?.nfcUidHash || "";
+    return normalize(v) || "-";
+  }, [scanRes]);
 
   return (
     <div className="r-shell">
@@ -221,7 +330,7 @@ function Regulator() {
           <div className="r-mark">Regulator</div>
           <div className="r-head-text">
             <div className="r-title">Audit & Verification</div>
-            <div className="r-subtitle">Verify documents, verify authenticity, then accept or reject the product</div>
+            <div className="r-subtitle">Verify documents, verify authenticity, approve identities, then accept or reject</div>
           </div>
         </div>
 
@@ -306,111 +415,201 @@ function Regulator() {
             </div>
           </div>
 
-          <div className="r-card">
-            <div className="r-card-head">
-              <div className="r-card-title">Verification</div>
-              <div className="r-card-sub">{selected ? `Selected: ${selected.product_code}` : "Select a product from the table"}</div>
+          <div className="r-rightcol">
+            
+
+            <div className="r-card">
+              <div className="r-card-head">
+                <div className="r-card-title">Verification</div>
+                <div className="r-card-sub">{selected ? `Selected: ${selected.product_code}` : "Select a product from the table"}</div>
+              </div>
+
+              {selected ? (
+                <>
+                  <div className="r-section">
+                    <div className="r-section-title">Document check (IPFS)</div>
+                    <div className="r-kv">
+                      <div className="r-kv-row">
+                        <span>ipfs_cid</span>
+                        <span className="mono">{selected.ipfs_cid || "-"}</span>
+                      </div>
+                      <div className="r-kv-row">
+                        <span>certificate_sha256</span>
+                        <span className="mono">{certificateSha || "-"}</span>
+                      </div>
+                      <div className="r-kv-row">
+                        <span>cloud_hash (DB)</span>
+                        <span className="mono">{selected.cloud_hash || "-"}</span>
+                      </div>
+                    </div>
+
+                    <div className="r-actions">
+                      <button className="r-btn ghost" type="button" onClick={() => copyText(selected.ipfs_cid)} disabled={!selected.ipfs_cid}>
+                        Copy CID
+                      </button>
+                      <button className="r-btn ghost" type="button" onClick={() => copyText(certificateSha)} disabled={!certificateSha}>
+                        Copy Cert Hash
+                      </button>
+                      <a className={`r-btn link ${ipfsUrl ? "" : "disabled"}`} href={ipfsUrl || "#"} target="_blank" rel="noreferrer">
+                        Open IPFS File
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="r-section">
+                    <div className="r-section-title">Product check (Blockchain + DB)</div>
+                    <div className="r-kv">
+                      <div className="r-kv-row">
+                        <span>product_code</span>
+                        <span className="mono">{selected.product_code}</span>
+                      </div>
+                      <div className="r-kv-row">
+                        <span>name</span>
+                        <span>{selected.name || "-"}</span>
+                      </div>
+                      <div className="r-kv-row">
+                        <span>brand</span>
+                        <span>{brand || "-"}</span>
+                      </div>
+                      <div className="r-kv-row">
+                        <span>current_state_hash</span>
+                        <span className="mono">{short(selected.current_state_hash, 12)}</span>
+                      </div>
+                      <div className="r-kv-row">
+                        <span>nfc_uid_hash</span>
+                        <span className="mono">{short(selected.nfc_uid_hash, 12)}</span>
+                      </div>
+                    </div>
+
+                    <div className="r-actions">
+                      <button className="r-btn" type="button" onClick={runScanForSelected} disabled={scanLoading}>
+                        {scanLoading ? "Verifying..." : "Verify Authenticity"}
+                      </button>
+                      <button className="r-btn ghost" type="button" onClick={() => loadHistory(selected.product_code)} disabled={historyLoading}>
+                        {historyLoading ? "Loading..." : "Refresh History"}
+                      </button>
+                    </div>
+
+                    {scanRes?.verdict ? (
+                      <div className="r-verdict">
+                        <div className={`r-verdict-pill ${scanRes.verdict.isAuthentic ? "ok" : "bad"}`}>
+                          {scanRes.verdict.isAuthentic ? "AUTHENTIC (HASH MATCH)" : "NOT AUTHENTIC (MISMATCH)"}
+                        </div>
+                        <div className="r-kv tight">
+                          <div className="r-kv-row">
+                            <span>isLatestDbState</span>
+                            <span>{String(scanRes.verdict.isLatestDbState)}</span>
+                          </div>
+                          <div className="r-kv-row">
+                            <span>dbCloudHashMatches</span>
+                            <span>{String(scanRes.verdict.dbCloudHashMatches)}</span>
+                          </div>
+                          <div className="r-kv-row">
+                            <span>chainCloudHashMatches</span>
+                            <span>{String(scanRes.verdict.chainCloudHashMatches)}</span>
+                          </div>
+                          <div className="r-kv-row">
+                            <span>message</span>
+                            <span>{scanRes.verdict.message}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="r-section">
+                    <div className="r-section-title">Chain evidence</div>
+                    <div className="r-kv">
+                      {renderKeyValue("contract_address", chainContractAddress)}
+                      {renderKeyValue("register_tx_hash", chainRegisterTx)}
+                      {renderKeyValue("chain_cloud_hash", chainCloudHash)}
+                      {renderKeyValue("chain_nfc_uid_hash", chainNfcHash)}
+                    </div>
+
+                    <div className="r-actions">
+                      <button className="r-btn ghost" type="button" onClick={() => copyText(chainRegisterTx)} disabled={chainRegisterTx === "-"}>
+                        Copy Tx
+                      </button>
+                      <button className="r-btn ghost" type="button" onClick={() => copyText(chainContractAddress)} disabled={chainContractAddress === "-"}>
+                        Copy Contract
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="r-section">
+                    <div className="r-section-title">Audit decision</div>
+
+                    <div className="r-field">
+                      <div className="r-field-label">Reason / Evidence</div>
+                      <textarea
+                        className="r-textarea"
+                        value={auditReason}
+                        onChange={(e) => setAuditReason(e.target.value)}
+                        placeholder="Write why you accept or reject (e.g., hash mismatch, missing document, duplicate code)"
+                        disabled={actionLoading || !isRegulator}
+                        rows={4}
+                      />
+                      <div className="r-hint">If backend supports it, the reason will be saved. If not, decision will still work.</div>
+                    </div>
+
+                    <div className="r-actions">
+                      <button className="r-btn ghost" type="button" onClick={() => auditDecision(selected.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                        Accept as Original
+                      </button>
+                      <button className="r-btn danger" type="button" onClick={() => auditDecision(selected.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                        Mark as Duplicate
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="r-section">
+                    <div className="r-section-title">Full history</div>
+
+                    {historyRes ? (
+                      <>
+                        <div className="r-kv">
+                          {renderKeyValue("product_code", historyRes.product?.product_code || selected.product_code)}
+                          {renderKeyValue("current_state_hash", historyRes.product?.current_state_hash || selected.current_state_hash || "-")}
+                          {renderKeyValue("ipfs_cid", historyRes.product?.ipfs_cid || selected.ipfs_cid || "-")}
+                        </div>
+
+                        <div className="r-events">
+                          {events.map((ev) => (
+                            <div className="r-ev" key={ev.id || `${ev.event_type}-${ev.created_at}`}>
+                              <div className="r-ev-top">
+                                <div className="r-ev-type">{ev.event_type}</div>
+                                <div className="r-ev-time">{ev.created_at ? new Date(ev.created_at).toLocaleString() : "-"}</div>
+                              </div>
+                              <div className="r-ev-body">
+                                <div className="r-ev-row">
+                                  <span>actor</span>
+                                  <span>
+                                    {ev.actor_email || "-"} ({ev.actor_role || "-"})
+                                  </span>
+                                </div>
+                                <div className="r-ev-row">
+                                  <span>tx</span>
+                                  <span className="mono">{ev.chain_tx_hash || "null"}</span>
+                                </div>
+                                <div className="r-ev-row">
+                                  <span>notes</span>
+                                  <span>{ev.notes || ""}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {events.length === 0 ? <div className="r-empty-block">No events found.</div> : null}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="r-empty-block">{historyLoading ? "Loading..." : "No history loaded."}</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="r-placeholder">Pick a product from the left table to verify documents, authenticity, and history.</div>
+              )}
             </div>
-
-            {selected ? (
-              <>
-                <div className="r-section">
-                  <div className="r-section-title">Document check (IPFS)</div>
-                  <div className="r-kv">
-                    <div className="r-kv-row">
-                      <span>ipfs_cid</span>
-                      <span className="mono">{selected.ipfs_cid || "-"}</span>
-                    </div>
-                    <div className="r-kv-row">
-                      <span>certificate_sha256</span>
-                      <span className="mono">{certificateSha || "-"}</span>
-                    </div>
-                    <div className="r-kv-row">
-                      <span>cloud_hash (DB)</span>
-                      <span className="mono">{selected.cloud_hash || "-"}</span>
-                    </div>
-                  </div>
-
-                  <div className="r-actions">
-                    <button className="r-btn ghost" type="button" onClick={() => copyText(selected.ipfs_cid)} disabled={!selected.ipfs_cid}>
-                      Copy CID
-                    </button>
-                    <button className="r-btn ghost" type="button" onClick={() => copyText(certificateSha)} disabled={!certificateSha}>
-                      Copy Cert Hash
-                    </button>
-                    <a className={`r-btn link ${ipfsUrl ? "" : "disabled"}`} href={ipfsUrl || "#"} target="_blank" rel="noreferrer">
-                      Open IPFS File
-                    </a>
-                  </div>
-                </div>
-
-                <div className="r-section">
-                  <div className="r-section-title">Product check (Blockchain + DB)</div>
-                  <div className="r-kv">
-                    <div className="r-kv-row">
-                      <span>product_code</span>
-                      <span className="mono">{selected.product_code}</span>
-                    </div>
-                    <div className="r-kv-row">
-                      <span>name</span>
-                      <span>{selected.name || "-"}</span>
-                    </div>
-                    <div className="r-kv-row">
-                      <span>brand</span>
-                      <span>{brand || "-"}</span>
-                    </div>
-                    <div className="r-kv-row">
-                      <span>current_state_hash</span>
-                      <span className="mono">{short(selected.current_state_hash, 12)}</span>
-                    </div>
-                    <div className="r-kv-row">
-                      <span>nfc_uid_hash</span>
-                      <span className="mono">{short(selected.nfc_uid_hash, 12)}</span>
-                    </div>
-                  </div>
-
-                  <div className="r-actions">
-                    <button className="r-btn" type="button" onClick={runScanForSelected} disabled={scanLoading}>
-                      {scanLoading ? "Verifying..." : "Verify Authenticity"}
-                    </button>
-                    <button className="r-btn ghost" type="button" onClick={() => auditDecision(selected.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
-                      Accept as Original
-                    </button>
-                    <button className="r-btn danger" type="button" onClick={() => auditDecision(selected.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
-                      Mark as Duplicate
-                    </button>
-                  </div>
-
-                  {scanRes?.verdict ? (
-                    <div className="r-verdict">
-                      <div className={`r-verdict-pill ${scanRes.verdict.isAuthentic ? "ok" : "bad"}`}>
-                        {scanRes.verdict.isAuthentic ? "AUTHENTIC (HASH MATCH)" : "NOT AUTHENTIC (MISMATCH)"}
-                      </div>
-                      <div className="r-kv tight">
-                        <div className="r-kv-row">
-                          <span>isLatestDbState</span>
-                          <span>{String(scanRes.verdict.isLatestDbState)}</span>
-                        </div>
-                        <div className="r-kv-row">
-                          <span>dbCloudHashMatches</span>
-                          <span>{String(scanRes.verdict.dbCloudHashMatches)}</span>
-                        </div>
-                        <div className="r-kv-row">
-                          <span>chainCloudHashMatches</span>
-                          <span>{String(scanRes.verdict.chainCloudHashMatches)}</span>
-                        </div>
-                        <div className="r-kv-row">
-                          <span>message</span>
-                          <span>{scanRes.verdict.message}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <div className="r-placeholder">Pick a product from the left table to verify documents and authenticity.</div>
-            )}
           </div>
         </section>
       </main>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./Navbar";
 import "./Regulator.css";
@@ -41,15 +41,19 @@ function Regulator() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRes, setHistoryRes] = useState(null);
 
-  const [sellerWallet, setSellerWallet] = useState("");
-  const [sellerVerifying, setSellerVerifying] = useState(false);
-  const [sellerVerifyRes, setSellerVerifyRes] = useState(null);
+  const toastTimerRef = useRef(null);
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
     setToast(msg);
-    window.clearTimeout(showToast._t);
-    showToast._t = window.setTimeout(() => setToast(""), 2200);
-  };
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(""), 2200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const apiFetch = useCallback(
     async (path, opts = {}) => {
@@ -93,13 +97,13 @@ function Regulator() {
     if (!meLoading && (me || authUser) && !isRegulator) setError("Please login as Regulator to use this portal.");
   }, [isAuthed, meLoading, me, authUser, isRegulator]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
     setAuthToken("");
     setAuthUser(null);
     navigate("/");
-  };
+  }, [navigate]);
 
   const loadProducts = useCallback(async () => {
     if (!isAuthed) return;
@@ -147,36 +151,45 @@ function Regulator() {
     return arr;
   }, [historyRes]);
 
-  const copyText = async (text) => {
-    const t = normalize(text);
-    if (!t) return;
-    try {
-      await navigator.clipboard.writeText(t);
-      showToast("Copied");
-    } catch {
-      setError("Copy failed. Please copy manually.");
-    }
-  };
+  const copyText = useCallback(
+    async (text) => {
+      const t = normalize(text);
+      if (!t) return;
+      try {
+        await navigator.clipboard.writeText(t);
+        showToast("Copied");
+      } catch {
+        setError("Copy failed. Please copy manually.");
+      }
+    },
+    [showToast]
+  );
 
-  const short = (v, n = 10) => {
+  const short = useCallback((v, n = 10) => {
     const s = normalize(v);
     if (!s) return "-";
     if (s.length <= n * 2 + 3) return s;
     return `${s.slice(0, n)}...${s.slice(-n)}`;
-  };
+  }, []);
 
-  const renderKeyValue = (k, v) => (
-    <div className="r-kv-row" key={k}>
-      <span>{k}</span>
-      <span className={String(v ?? "").startsWith("0x") ? "mono" : ""}>{String(v ?? "-")}</span>
-    </div>
+  const renderKeyValue = useCallback(
+    (k, v) => (
+      <div className="r-kv-row" key={k}>
+        <span>{k}</span>
+        <span className={String(v ?? "").startsWith("0x") ? "mono" : ""}>{String(v ?? "-")}</span>
+      </div>
+    ),
+    []
   );
 
-  const runScanForSelected = async () => {
+  const runScanForSelected = useCallback(async () => {
     if (!selected) return;
     const pid = normalize(selected.product_code);
     const sh = normalize(selected.current_state_hash);
-    if (!pid || !sh) return setError("Missing productId or stateHash for this product.");
+    if (!pid || !sh) {
+      setError("Missing productId or stateHash for this product.");
+      return;
+    }
     setError("");
     setScanLoading(true);
     setScanRes(null);
@@ -194,24 +207,27 @@ function Regulator() {
     } finally {
       setScanLoading(false);
     }
-  };
+  }, [apiFetch, selected, showToast]);
 
-  const loadHistory = async (code) => {
-    const pc = normalize(code || selectedCode);
-    if (!pc) return;
-    setHistoryLoading(true);
-    setError("");
-    try {
-      const data = await apiFetch(`/api/products/${encodeURIComponent(pc)}/history`, { method: "GET", auth: false });
-      setHistoryRes(data);
-      showToast("History loaded");
-    } catch (e) {
-      setHistoryRes(null);
-      setError(String(e?.message || e));
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
+  const loadHistory = useCallback(
+    async (code) => {
+      const pc = normalize(code || selectedCode);
+      if (!pc) return;
+      setHistoryLoading(true);
+      setError("");
+      try {
+        const data = await apiFetch(`/api/products/${encodeURIComponent(pc)}/history`, { method: "GET", auth: false });
+        setHistoryRes(data);
+        showToast("History loaded");
+      } catch (e) {
+        setHistoryRes(null);
+        setError(String(e?.message || e));
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [apiFetch, selectedCode, showToast]
+  );
 
   useEffect(() => {
     setScanRes(null);
@@ -220,81 +236,68 @@ function Regulator() {
     if (!isAuthed || !isRegulator) return;
     if (!selectedCode) return;
     loadHistory(selectedCode);
-  }, [selectedCode, isAuthed, isRegulator]);
+  }, [selectedCode, isAuthed, isRegulator, loadHistory]);
 
-  const postAudit = async (pc, decision, reason) => {
-    await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, reason: normalize(reason) || undefined })
-    });
-  };
+  const postAudit = useCallback(
+    async (pc, decision, reason) => {
+      await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, reason: normalize(reason) || undefined })
+      });
+    },
+    [apiFetch]
+  );
 
-  const auditDecision = async (productCode, decision) => {
-    const pc = normalize(productCode);
-    if (!pc) return;
-    if (!isRegulator) return setError("Please login as Regulator to use this portal.");
-    setError("");
-    setActionLoading(true);
-    try {
+  const auditDecision = useCallback(
+    async (productCode, decision) => {
+      const pc = normalize(productCode);
+      if (!pc) return;
+      if (!isRegulator) {
+        setError("Please login as Regulator to use this portal.");
+        return;
+      }
+      setError("");
+      setActionLoading(true);
       try {
-        await postAudit(pc, decision, auditReason);
+        try {
+          await postAudit(pc, decision, auditReason);
+        } catch {
+          await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision })
+          });
+        }
+
+        showToast(decision === "ACCEPT" ? "Accepted as original" : "Marked as duplicate");
+        await loadProducts();
+        if (normalize(selectedCode) === pc) {
+          setScanRes(null);
+          await loadHistory(pc);
+        }
       } catch (e) {
-        await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ decision })
-        });
+        setError(String(e?.message || e));
+      } finally {
+        setActionLoading(false);
       }
+    },
+    [apiFetch, auditReason, isRegulator, loadHistory, loadProducts, postAudit, selectedCode, showToast]
+  );
 
-      showToast(decision === "ACCEPT" ? "Accepted as original" : "Marked as duplicate");
-      await loadProducts();
-      if (normalize(selectedCode) === pc) {
-        setScanRes(null);
-        await loadHistory(pc);
-      }
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const pillClass = (p) => {
+  const pillClass = useCallback((p) => {
     const t = normalize(p?.audit_status).toUpperCase();
     if (t === "ACCEPT") return "ok";
     if (t === "REJECT") return "bad";
     return "neutral";
-  };
+  }, []);
 
-  const pillText = (p) => {
+  const pillText = useCallback((p) => {
     const t = normalize(p?.audit_status).toUpperCase();
     if (t === "ACCEPT") return "ACCEPTED";
     if (t === "REJECT") return "REJECTED";
     return "PENDING";
-  };
-
-  const verifySellerWallet = async () => {
-    const wa = normalize(sellerWallet);
-    if (!wa) return setError("Enter seller wallet address to verify.");
-    if (!isRegulator) return setError("Please login as Regulator to use this portal.");
-    setError("");
-    setSellerVerifying(true);
-    setSellerVerifyRes(null);
-    try {
-      const data = await apiFetch("/api/sellers/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet_address: wa })
-      });
-      setSellerVerifyRes(data);
-      showToast("Seller wallet verified");
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setSellerVerifying(false);
-    }
-  };
+  }, []);
 
   const chainContractAddress = useMemo(() => {
     const v = scanRes?.chain?.contract_address || scanRes?.chain?.contractAddress || "";
@@ -341,9 +344,7 @@ function Regulator() {
             </button>
           ) : (
             <>
-              <div className="r-session">
-                {meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}
-              </div>
+              <div className="r-session">{meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}</div>
               <button className="r-btn ghost" type="button" onClick={logout}>
                 Logout
               </button>
@@ -391,10 +392,20 @@ function Regulator() {
                             <button className="r-btn small" type="button" onClick={() => setSelectedCode(p.product_code)}>
                               View
                             </button>
-                            <button className="r-btn small ghost" type="button" onClick={() => auditDecision(p.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                            <button
+                              className="r-btn small ghost"
+                              type="button"
+                              onClick={() => auditDecision(p.product_code, "ACCEPT")}
+                              disabled={actionLoading || !isRegulator}
+                            >
                               Accept
                             </button>
-                            <button className="r-btn small danger" type="button" onClick={() => auditDecision(p.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                            <button
+                              className="r-btn small danger"
+                              type="button"
+                              onClick={() => auditDecision(p.product_code, "REJECT")}
+                              disabled={actionLoading || !isRegulator}
+                            >
                               Reject
                             </button>
                           </div>
@@ -416,8 +427,6 @@ function Regulator() {
           </div>
 
           <div className="r-rightcol">
-            
-
             <div className="r-card">
               <div className="r-card-head">
                 <div className="r-card-title">Verification</div>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
 import Navbar from "./Navbar";
@@ -32,6 +32,7 @@ function Seller() {
 
   const [qrPng, setQrPng] = useState("");
   const [qrValue, setQrValue] = useState("");
+
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
 
@@ -47,10 +48,18 @@ function Seller() {
   const isAuthed = Boolean(authToken);
   const isSeller = (me?.role || authUser?.role || "").toLowerCase() === "seller";
 
+  const toastTimerRef = useRef(null);
+
   const showToast = useCallback((msg) => {
     setToast(msg);
-    window.clearTimeout(showToast._t);
-    showToast._t = window.setTimeout(() => setToast(""), 2000);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(""), 2000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
   const apiFetch = useCallback(
@@ -90,15 +99,17 @@ function Seller() {
     run();
   }, [isAuthed, apiFetch]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
     setAuthToken("");
     setAuthUser(null);
     navigate("/");
-  };
+  }, [navigate]);
 
-  const goLogin = () => navigate("/auth");
+  const goLogin = useCallback(() => {
+    navigate("/auth");
+  }, [navigate]);
 
   const guardSeller = useCallback(() => {
     if (!isAuthed) {
@@ -110,7 +121,7 @@ function Seller() {
       return false;
     }
     return true;
-  }, [isAuthed, isSeller, navigate]);
+  }, [isAuthed, isSeller, goLogin]);
 
   const parseExtra = useCallback(() => {
     const raw = normalize(extraJson);
@@ -135,10 +146,13 @@ function Seller() {
     return "Token present, unable to fetch /me";
   }, [meLoading, isAuthed, me]);
 
-  const linkWallet = async () => {
+  const linkWallet = useCallback(async () => {
     if (!guardSeller()) return;
     const w = normalize(walletAddress);
-    if (!w) return setError("Enter wallet address.");
+    if (!w) {
+      setError("Enter wallet address.");
+      return;
+    }
     setError("");
     setWalletLinking(true);
     setWalletLinked(null);
@@ -153,13 +167,15 @@ function Seller() {
       try {
         const meData = await apiFetch("/api/auth/me", { method: "GET" });
         setMe(meData?.user || null);
-      } catch {}
+      } catch {
+        setMe((x) => x);
+      }
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
       setWalletLinking(false);
     }
-  };
+  }, [apiFetch, guardSeller, showToast, walletAddress]);
 
   const buildCustomerLink = useCallback((pid, sh) => {
     const origin = window.location.origin;
@@ -196,20 +212,31 @@ function Seller() {
     make();
   }, [transferRes, buildCustomerLink]);
 
-  const transferProduct = async () => {
+  const transferProduct = useCallback(async () => {
     if (!guardSeller()) return;
 
     if (!normalize(walletStatus)) {
-      return setError("Link your wallet first. Manufacturer/Admin will verify it.");
+      setError("Link your wallet first. Manufacturer/Admin will verify it.");
+      return;
     }
 
     const pc = normalize(productCode);
-    if (!pc) return setError("Enter product code.");
+    if (!pc) {
+      setError("Enter product code.");
+      return;
+    }
+
     const to = normalize(toWallet);
-    if (!to) return setError("Enter valid to_wallet address.");
+    if (!to) {
+      setError("Enter valid to_wallet address.");
+      return;
+    }
 
     const extraObj = parseExtra();
-    if (extraObj === null) return setError("Extra JSON is invalid.");
+    if (extraObj === null) {
+      setError("Extra JSON is invalid.");
+      return;
+    }
 
     setError("");
     setTransferring(true);
@@ -239,7 +266,10 @@ function Seller() {
           setScanProductId(pid);
           setScanStateHash(sh);
         }
-      } catch {}
+      } catch {
+        setScanProductId((x) => x);
+        setScanStateHash((x) => x);
+      }
 
       showToast("Transfer completed");
     } catch (e) {
@@ -247,12 +277,15 @@ function Seller() {
     } finally {
       setTransferring(false);
     }
-  };
+  }, [apiFetch, guardSeller, notes, parseExtra, productCode, showToast, toWallet, walletStatus]);
 
-  const scanVerify = async () => {
+  const scanVerify = useCallback(async () => {
     const pid = normalize(scanProductId);
     const sh = normalize(scanStateHash);
-    if (!pid || !sh) return setError("Enter productId and stateHash to scan.");
+    if (!pid || !sh) {
+      setError("Enter productId and stateHash to scan.");
+      return;
+    }
     setError("");
     setScanning(true);
     setScanRes(null);
@@ -270,9 +303,9 @@ function Seller() {
     } finally {
       setScanning(false);
     }
-  };
+  }, [apiFetch, scanProductId, scanStateHash, showToast]);
 
-  const copyQrValue = async () => {
+  const copyQrValue = useCallback(async () => {
     const v = normalize(qrValue);
     if (!v) return;
     try {
@@ -281,9 +314,9 @@ function Seller() {
     } catch {
       setError("Copy failed. Please copy manually.");
     }
-  };
+  }, [qrValue, showToast]);
 
-  const downloadQr = () => {
+  const downloadQr = useCallback(() => {
     if (!qrPng) return;
     const a = document.createElement("a");
     a.href = qrPng;
@@ -291,18 +324,29 @@ function Seller() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-  };
+  }, [productCode, qrPng]);
 
-  const clearTransfer = () => {
+  const clearTransfer = useCallback(() => {
     setTransferRes(null);
     setQrPng("");
     setQrValue("");
-  };
+  }, []);
 
-  const clearScan = () => {
+  const clearScan = useCallback(() => {
     setScanRes(null);
     setError("");
-  };
+  }, []);
+
+  const fillScanInputsFromPayload = useCallback(() => {
+    try {
+      const parsed = JSON.parse(transferRes?.qr_payload || "{}");
+      setScanProductId(normalize(parsed?.productId));
+      setScanStateHash(normalize(parsed?.stateHash));
+      showToast("Scan inputs filled");
+    } catch {
+      setError("QR payload parse failed.");
+    }
+  }, [showToast, transferRes]);
 
   const verdict = scanRes?.verdict || null;
 
@@ -361,7 +405,13 @@ function Seller() {
           <div className="sp-form">
             <div className="sp-field">
               <label className="sp-label">Wallet address</label>
-              <input className="sp-input sp-mono" value={walletAddress} onChange={(e) => setWalletAddress(e.target.value)} placeholder="0x..." disabled={walletLinking || transferring} />
+              <input
+                className="sp-input sp-mono"
+                value={walletAddress}
+                onChange={(e) => setWalletAddress(e.target.value)}
+                placeholder="0x..."
+                disabled={walletLinking || transferring}
+              />
             </div>
             <div className="sp-actions">
               <button className="sp-btn" type="button" onClick={linkWallet} disabled={walletLinking || !isSeller}>
@@ -402,7 +452,13 @@ function Seller() {
 
             <div className="sp-field">
               <label className="sp-label">Extra JSON</label>
-              <input className="sp-input sp-mono" value={extraJson} onChange={(e) => setExtraJson(e.target.value)} placeholder='{"stage":"seller_update"}' disabled={transferring} />
+              <input
+                className="sp-input sp-mono"
+                value={extraJson}
+                onChange={(e) => setExtraJson(e.target.value)}
+                placeholder='{"stage":"seller_update"}'
+                disabled={transferring}
+              />
             </div>
           </div>
 
@@ -459,20 +515,7 @@ function Seller() {
                     <div className="sp-qr-imgwrap">{qrPng ? <img className="sp-qr-img" src={qrPng} alt="qr" /> : <div className="sp-placeholder">QR preview</div>}</div>
                   </div>
 
-                  <button
-                    className="sp-btn sp-btn-secondary sp-full"
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const parsed = JSON.parse(transferRes.qr_payload);
-                        setScanProductId(normalize(parsed?.productId));
-                        setScanStateHash(normalize(parsed?.stateHash));
-                        showToast("Scan inputs filled");
-                      } catch {
-                        setError("QR payload parse failed.");
-                      }
-                    }}
-                  >
+                  <button className="sp-btn sp-btn-secondary sp-full" type="button" onClick={fillScanInputsFromPayload}>
                     Fill scan inputs (internal test)
                   </button>
                 </div>

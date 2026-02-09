@@ -24,16 +24,19 @@ function Regulator() {
   const isAuthed = Boolean(authToken);
   const isRegulator = (me?.role || authUser?.role || "").toLowerCase() === "regulator";
 
-  const [activeTab, setActiveTab] = useState("manufacturers");
+  const [activeTab, setActiveTab] = useState("users");
+  const [userRoleTab, setUserRoleTab] = useState("manufacturer");
 
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
 
-  const [manufacturersLoading, setManufacturersLoading] = useState(false);
-  const [manufacturers, setManufacturers] = useState([]);
-  const [selectedManufacturerId, setSelectedManufacturerId] = useState("");
-  const [mActionLoading, setMActionLoading] = useState(false);
-  const [mDecisionReason, setMDecisionReason] = useState("");
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [uActionLoading, setUActionLoading] = useState(false);
+  const [uDecisionNotes, setUDecisionNotes] = useState("");
+  const [userStatusFilter, setUserStatusFilter] = useState("PENDING");
+  const [userSearch, setUserSearch] = useState("");
 
   const [productsLoading, setProductsLoading] = useState(false);
   const [products, setProducts] = useState([]);
@@ -112,16 +115,6 @@ function Regulator() {
     navigate("/");
   }, [navigate]);
 
-  const renderKeyValue = useCallback(
-    (k, v) => (
-      <div className="r-kv-row" key={k}>
-        <span>{k}</span>
-        <span className={String(v ?? "").startsWith("0x") ? "mono" : ""}>{String(v ?? "-")}</span>
-      </div>
-    ),
-    []
-  );
-
   const copyText = useCallback(
     async (text) => {
       const t = normalize(text);
@@ -136,234 +129,230 @@ function Regulator() {
     [showToast]
   );
 
-  const short = useCallback((v, n = 10) => {
+  const fmtDate = useCallback((v) => {
     const s = normalize(v);
     if (!s) return "-";
-    if (s.length <= n * 2 + 3) return s;
-    return `${s.slice(0, n)}...${s.slice(-n)}`;
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return s;
+    return d.toLocaleString();
   }, []);
 
-  const loadManufacturers = useCallback(async () => {
+  const shortWallet = useCallback((v) => {
+    const s = normalize(v);
+    if (!s) return "-";
+    if (!s.startsWith("0x")) return s;
+    if (s.length <= 16) return s;
+    return `${s.slice(0, 8)}...${s.slice(-6)}`;
+  }, []);
+
+  const userStatusText = useCallback((u) => {
+    const raw = normalize(u?.approval_status);
+    const t = raw.toUpperCase();
+    return t || "PENDING";
+  }, []);
+
+  const pillClassByStatus = useCallback((statusText) => {
+    const t = normalize(statusText).toUpperCase();
+    if (t === "APPROVED") return "ok";
+    if (t === "REJECTED") return "bad";
+    return "neutral";
+  }, []);
+
+  const userPillClass = useCallback(
+    (u) => {
+      const t = userStatusText(u);
+      return pillClassByStatus(t);
+    },
+    [pillClassByStatus, userStatusText]
+  );
+
+  const loadUsers = useCallback(async () => {
     if (!isAuthed || !isRegulator) return;
-    setManufacturersLoading(true);
+    setUsersLoading(true);
     setError("");
     try {
-      let data = null;
-      try {
-        data = await apiFetch("/api/manufacturers?status=pending", { method: "GET" });
-      } catch {
-        data = await apiFetch("/api/manufacturers/pending", { method: "GET" });
-      }
+      const role = normalize(userRoleTab).toLowerCase() === "seller" ? "seller" : "manufacturer";
+      const st = normalize(userStatusFilter).toUpperCase();
+      const qs = new URLSearchParams();
+      qs.set("role", role);
+      if (st && st !== "ALL") qs.set("status", st);
+
+      const data = await apiFetch(`/api/manufacturers?${qs.toString()}`, { method: "GET" });
 
       const rows =
-        (Array.isArray(data?.manufacturers) && data.manufacturers) ||
-        (Array.isArray(data?.pending) && data.pending) ||
-        (Array.isArray(data) && data) ||
+        (role === "seller" && Array.isArray(data?.sellers) && data.sellers) ||
+        (role === "manufacturer" && Array.isArray(data?.manufacturers) && data.manufacturers) ||
+        (Array.isArray(data?.users) && data.users) ||
         [];
 
-      setManufacturers(rows);
+      setUsers(rows);
 
-      const firstId =
-        rows?.[0]?.id ||
-        rows?.[0]?._id ||
-        rows?.[0]?.manufacturer_id ||
-        rows?.[0]?.manufacturerId ||
-        rows?.[0]?.email ||
-        "";
-
-      if (!selectedManufacturerId && firstId) setSelectedManufacturerId(String(firstId));
+      const firstId = rows?.[0]?.id || "";
+      if (!selectedUserId && firstId) setSelectedUserId(String(firstId));
     } catch (e) {
-      setManufacturers([]);
+      setUsers([]);
       setError(String(e?.message || e));
     } finally {
-      setManufacturersLoading(false);
+      setUsersLoading(false);
     }
-  }, [apiFetch, isAuthed, isRegulator, selectedManufacturerId]);
-
-  const manufacturerIdOf = useCallback((m) => {
-    return (
-      String(m?.id ?? "") ||
-      String(m?._id ?? "") ||
-      String(m?.manufacturer_id ?? "") ||
-      String(m?.manufacturerId ?? "") ||
-      String(m?.email ?? "") ||
-      ""
-    );
-  }, []);
-
-  const selectedManufacturer = useMemo(() => {
-    const sid = normalize(selectedManufacturerId);
-    if (!sid) return null;
-    return (
-      manufacturers.find((m) => normalize(manufacturerIdOf(m)) === sid) ||
-      manufacturers.find((m) => normalize(m?.email) === sid) ||
-      null
-    );
-  }, [manufacturers, manufacturerIdOf, selectedManufacturerId]);
-
-  const manufacturerStatusText = useCallback((m) => {
-    const raw = normalize(m?.status || m?.approval_status || m?.onboarding_status || m?.state);
-    const t = raw.toUpperCase();
-    if (t) return t;
-    return "PENDING";
-  }, []);
-
-  const manufacturerPillClass = useCallback(
-    (m) => {
-      const t = manufacturerStatusText(m);
-      if (t === "APPROVED" || t === "ACCEPT" || t === "ACTIVE") return "ok";
-      if (t === "REJECTED" || t === "REJECT") return "bad";
-      return "neutral";
-    },
-    [manufacturerStatusText]
-  );
-
-  const postManufacturerDecision = useCallback(
-    async (id, decision, reason) => {
-      const rid = normalize(id);
-      if (!rid) throw new Error("Missing manufacturer id");
-      const payload = { decision, reason: normalize(reason) || undefined };
-
-      try {
-        await apiFetch(`/api/manufacturers/${encodeURIComponent(rid)}/approve`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: normalize(reason) || undefined })
-        });
-        return;
-      } catch {}
-
-      try {
-        await apiFetch(`/api/manufacturers/${encodeURIComponent(rid)}/reject`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: normalize(reason) || undefined })
-        });
-        return;
-      } catch {}
-
-      await apiFetch(`/api/manufacturers/${encodeURIComponent(rid)}/audit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-    },
-    [apiFetch]
-  );
-
-  const approveManufacturer = useCallback(async () => {
-    if (!isRegulator) {
-      setError("Please login as Regulator to use this portal.");
-      return;
-    }
-    if (!selectedManufacturer) {
-      setError("Select a manufacturer to approve.");
-      return;
-    }
-    const id = manufacturerIdOf(selectedManufacturer);
-    if (!normalize(id)) {
-      setError("Manufacturer id is missing.");
-      return;
-    }
-    setError("");
-    setMActionLoading(true);
-    try {
-      await postManufacturerDecision(id, "APPROVE", mDecisionReason);
-      showToast("Manufacturer approved");
-      setMDecisionReason("");
-      await loadManufacturers();
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setMActionLoading(false);
-    }
-  }, [isRegulator, loadManufacturers, mDecisionReason, manufacturerIdOf, postManufacturerDecision, selectedManufacturer, showToast]);
-
-  const rejectManufacturer = useCallback(async () => {
-    if (!isRegulator) {
-      setError("Please login as Regulator to use this portal.");
-      return;
-    }
-    if (!selectedManufacturer) {
-      setError("Select a manufacturer to reject.");
-      return;
-    }
-    const id = manufacturerIdOf(selectedManufacturer);
-    if (!normalize(id)) {
-      setError("Manufacturer id is missing.");
-      return;
-    }
-    setError("");
-    setMActionLoading(true);
-    try {
-      await postManufacturerDecision(id, "REJECT", mDecisionReason);
-      showToast("Manufacturer rejected");
-      setMDecisionReason("");
-      await loadManufacturers();
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setMActionLoading(false);
-    }
-  }, [isRegulator, loadManufacturers, mDecisionReason, manufacturerIdOf, postManufacturerDecision, selectedManufacturer, showToast]);
+  }, [apiFetch, isAuthed, isRegulator, selectedUserId, userRoleTab, userStatusFilter]);
 
   useEffect(() => {
     if (!isAuthed || !isRegulator) return;
-    loadManufacturers();
-  }, [isAuthed, isRegulator, loadManufacturers]);
+    loadUsers();
+  }, [isAuthed, isRegulator, loadUsers]);
+
+  const filteredUsers = useMemo(() => {
+    const q = normalize(userSearch).toLowerCase();
+    if (!q) return users;
+    return users.filter((u) => {
+      const email = normalize(u?.email).toLowerCase();
+      const wallet = normalize(u?.wallet_address).toLowerCase();
+      const id = normalize(u?.id).toLowerCase();
+      return email.includes(q) || wallet.includes(q) || id.includes(q);
+    });
+  }, [users, userSearch]);
+
+  const selectedUser = useMemo(() => {
+    const sid = normalize(selectedUserId);
+    if (!sid) return null;
+    return filteredUsers.find((u) => normalize(u?.id) === sid) || users.find((u) => normalize(u?.id) === sid) || null;
+  }, [filteredUsers, selectedUserId, users]);
+
+  const selectedUserDetails = useMemo(() => {
+    if (!selectedUser) return [];
+    return [
+      ["id", selectedUser.id || "-"],
+      ["role", selectedUser.role || "-"],
+      ["email", selectedUser.email || "-"],
+      ["wallet_address", selectedUser.wallet_address || "-"],
+      ["approval_status", userStatusText(selectedUser)],
+      ["approval_notes", selectedUser.approval_notes || "-"],
+      ["approved_by", selectedUser.approved_by || "-"],
+      ["approved_at", fmtDate(selectedUser.approved_at)],
+      ["rejected_by", selectedUser.rejected_by || "-"],
+      ["rejected_at", fmtDate(selectedUser.rejected_at)],
+      ["created_at", fmtDate(selectedUser.created_at)]
+    ];
+  }, [fmtDate, selectedUser, userStatusText]);
+
+  const postUserDecision = useCallback(
+    async (id, decision, notes) => {
+      const rid = normalize(id);
+      if (!rid) throw new Error("Missing user id");
+      const role = normalize(userRoleTab).toLowerCase() === "seller" ? "seller" : "manufacturer";
+      const body = JSON.stringify({ notes: normalize(notes) || null });
+
+      if (decision === "APPROVE") {
+        await apiFetch(`/api/manufacturers/${encodeURIComponent(rid)}/approve?role=${encodeURIComponent(role)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body
+        });
+        return;
+      }
+
+      await apiFetch(`/api/manufacturers/${encodeURIComponent(rid)}/reject?role=${encodeURIComponent(role)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body
+      });
+    },
+    [apiFetch, userRoleTab]
+  );
+
+  const approveUser = useCallback(async () => {
+    if (!isRegulator) {
+      setError("Please login as Regulator to use this portal.");
+      return;
+    }
+    if (!selectedUser) {
+      setError("Select a user to approve.");
+      return;
+    }
+    if (!normalize(selectedUser.id)) {
+      setError("User id is missing.");
+      return;
+    }
+    setError("");
+    setUActionLoading(true);
+    try {
+      await postUserDecision(selectedUser.id, "APPROVE", uDecisionNotes);
+      showToast(`${normalize(userRoleTab) === "seller" ? "Seller" : "Manufacturer"} approved`);
+      setUDecisionNotes("");
+      await loadUsers();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setUActionLoading(false);
+    }
+  }, [isRegulator, loadUsers, postUserDecision, selectedUser, showToast, uDecisionNotes, userRoleTab]);
+
+  const rejectUser = useCallback(async () => {
+    if (!isRegulator) {
+      setError("Please login as Regulator to use this portal.");
+      return;
+    }
+    if (!selectedUser) {
+      setError("Select a user to reject.");
+      return;
+    }
+    if (!normalize(selectedUser.id)) {
+      setError("User id is missing.");
+      return;
+    }
+    setError("");
+    setUActionLoading(true);
+    try {
+      await postUserDecision(selectedUser.id, "REJECT", uDecisionNotes);
+      showToast(`${normalize(userRoleTab) === "seller" ? "Seller" : "Manufacturer"} rejected`);
+      setUDecisionNotes("");
+      await loadUsers();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setUActionLoading(false);
+    }
+  }, [isRegulator, loadUsers, postUserDecision, selectedUser, showToast, uDecisionNotes, userRoleTab]);
 
   const loadProducts = useCallback(async () => {
-    if (!isAuthed) return;
+    if (!isAuthed || !isRegulator) return;
     setProductsLoading(true);
     setError("");
     try {
       const data = await apiFetch("/api/products", { method: "GET" });
-      const rows = Array.isArray(data?.products) ? data.products : [];
+      const rows = Array.isArray(data?.products) ? data.products : Array.isArray(data) ? data : [];
       setProducts(rows);
       if (!selectedCode && rows.length) setSelectedCode(rows[0].product_code);
     } catch (e) {
+      setProducts([]);
       setError(String(e?.message || e));
     } finally {
       setProductsLoading(false);
     }
-  }, [apiFetch, isAuthed, selectedCode]);
+  }, [apiFetch, isAuthed, isRegulator, selectedCode]);
 
   useEffect(() => {
     if (!isAuthed || !isRegulator) return;
     loadProducts();
   }, [isAuthed, isRegulator, loadProducts]);
 
-  const selected = useMemo(() => {
+  const selectedProduct = useMemo(() => {
     const code = normalize(selectedCode);
     return products.find((p) => normalize(p.product_code) === code) || null;
   }, [products, selectedCode]);
 
   const ipfsUrl = useMemo(() => {
-    const cid = normalize(selected?.ipfs_cid);
+    const cid = normalize(selectedProduct?.ipfs_cid);
     return cid ? `https://gateway.pinata.cloud/ipfs/${cid}` : "";
-  }, [selected]);
-
-  const certificateSha = useMemo(() => {
-    const v = selected?.meta_json?.certificate_sha256;
-    return typeof v === "string" ? v : "";
-  }, [selected]);
-
-  const brand = useMemo(() => {
-    const v = selected?.meta_json?.brand;
-    return typeof v === "string" ? v : "";
-  }, [selected]);
-
-  const events = useMemo(() => {
-    const arr = Array.isArray(historyRes?.events) ? historyRes.events : [];
-    return arr;
-  }, [historyRes]);
+  }, [selectedProduct]);
 
   const runScanForSelected = useCallback(async () => {
-    if (!selected) return;
-    const pid = normalize(selected.product_code);
-    const sh = normalize(selected.current_state_hash);
+    if (!selectedProduct) return;
+    const pid = normalize(selectedProduct.product_code);
+    const sh = normalize(selectedProduct.current_state_hash);
     if (!pid || !sh) {
-      setError("Missing productId or stateHash for this product.");
+      setError("Missing required data for verification.");
       return;
     }
     setError("");
@@ -383,7 +372,7 @@ function Regulator() {
     } finally {
       setScanLoading(false);
     }
-  }, [apiFetch, selected, showToast]);
+  }, [apiFetch, selectedProduct, showToast]);
 
   const loadHistory = useCallback(
     async (code) => {
@@ -394,7 +383,6 @@ function Regulator() {
       try {
         const data = await apiFetch(`/api/products/${encodeURIComponent(pc)}/history`, { method: "GET", auth: false });
         setHistoryRes(data);
-        showToast("History loaded");
       } catch (e) {
         setHistoryRes(null);
         setError(String(e?.message || e));
@@ -402,7 +390,7 @@ function Regulator() {
         setHistoryLoading(false);
       }
     },
-    [apiFetch, selectedCode, showToast]
+    [apiFetch, selectedCode]
   );
 
   useEffect(() => {
@@ -436,17 +424,8 @@ function Regulator() {
       setError("");
       setActionLoading(true);
       try {
-        try {
-          await postAudit(pc, decision, auditReason);
-        } catch {
-          await apiFetch(`/api/products/${encodeURIComponent(pc)}/audit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision })
-          });
-        }
-
-        showToast(decision === "ACCEPT" ? "Accepted as original" : "Marked as duplicate");
+        await postAudit(pc, decision, auditReason);
+        showToast(decision === "ACCEPT" ? "Accepted" : "Rejected");
         await loadProducts();
         if (normalize(selectedCode) === pc) {
           setScanRes(null);
@@ -458,102 +437,47 @@ function Regulator() {
         setActionLoading(false);
       }
     },
-    [apiFetch, auditReason, isRegulator, loadHistory, loadProducts, postAudit, selectedCode, showToast]
+    [auditReason, isRegulator, loadHistory, loadProducts, postAudit, selectedCode, showToast]
   );
 
-  const pillClass = useCallback((p) => {
-    const t = normalize(p?.audit_status).toUpperCase();
-    if (t === "ACCEPT") return "ok";
-    if (t === "REJECT") return "bad";
-    return "neutral";
-  }, []);
-
-  const pillText = useCallback((p) => {
+  const productPillText = useCallback((p) => {
     const t = normalize(p?.audit_status).toUpperCase();
     if (t === "ACCEPT") return "ACCEPTED";
     if (t === "REJECT") return "REJECTED";
     return "PENDING";
   }, []);
 
-  const chainContractAddress = useMemo(() => {
-    const v = scanRes?.chain?.contract_address || scanRes?.chain?.contractAddress || "";
-    return normalize(v) || "-";
-  }, [scanRes]);
+  const productPillClass = useCallback(
+    (p) => {
+      const t = productPillText(p);
+      return pillClassByStatus(t === "ACCEPTED" ? "APPROVED" : t === "REJECTED" ? "REJECTED" : "PENDING");
+    },
+    [pillClassByStatus, productPillText]
+  );
 
-  const chainRegisterTx = useMemo(() => {
-    const v =
-      selected?.chain_register_tx_hash ||
-      selected?.chainRegisterTxHash ||
-      scanRes?.chain?.register_tx_hash ||
-      scanRes?.chain?.registerTxHash ||
-      "";
-    return normalize(v) || "-";
-  }, [selected, scanRes]);
-
-  const chainCloudHash = useMemo(() => {
-    const v = scanRes?.chain?.cloud_hash || scanRes?.chain?.cloudHash || "";
-    return normalize(v) || "-";
-  }, [scanRes]);
-
-  const chainNfcHash = useMemo(() => {
-    const v = scanRes?.chain?.nfc_uid_hash || scanRes?.chain?.nfcUidHash || "";
-    return normalize(v) || "-";
-  }, [scanRes]);
-
-  const manufacturerDetails = useMemo(() => {
-    if (!selectedManufacturer) return [];
-    const m = selectedManufacturer;
-
-    const docsCid =
-      normalize(m?.ipfs_cid) ||
-      normalize(m?.docs_ipfs_cid) ||
-      normalize(m?.documents_ipfs_cid) ||
-      normalize(m?.document_cid) ||
-      normalize(m?.kyc_ipfs_cid) ||
-      "";
-
-    const name = normalize(m?.company_name) || normalize(m?.company) || normalize(m?.name) || normalize(m?.manufacturer_name) || "";
-    const email = normalize(m?.email) || normalize(m?.manufacturer_email) || "";
-    const phone = normalize(m?.phone) || normalize(m?.mobile) || "";
-    const wallet = normalize(m?.wallet_address) || normalize(m?.wallet) || "";
-    const regNo = normalize(m?.registration_no) || normalize(m?.registration_number) || normalize(m?.reg_no) || "";
-    const country = normalize(m?.country) || normalize(m?.location) || "";
-    const createdAt = normalize(m?.created_at) || normalize(m?.createdAt) || "";
-    const status = manufacturerStatusText(m);
-
-    const rows = [
-      ["status", status],
-      ["company", name || "-"],
-      ["email", email || "-"],
-      ["phone", phone || "-"],
-      ["wallet_address", wallet || "-"],
-      ["registration_no", regNo || "-"],
-      ["country", country || "-"],
-      ["created_at", createdAt ? new Date(createdAt).toLocaleString() : "-"]
-    ];
-
-    if (docsCid) rows.push(["documents_ipfs_cid", docsCid]);
-
-    return rows;
-  }, [manufacturerStatusText, selectedManufacturer]);
-
-  const manufacturerDocsUrl = useMemo(() => {
-    const cid =
-      normalize(selectedManufacturer?.ipfs_cid) ||
-      normalize(selectedManufacturer?.docs_ipfs_cid) ||
-      normalize(selectedManufacturer?.documents_ipfs_cid) ||
-      normalize(selectedManufacturer?.document_cid) ||
-      normalize(selectedManufacturer?.kyc_ipfs_cid) ||
-      "";
-    return cid ? `https://gateway.pinata.cloud/ipfs/${cid}` : "";
-  }, [selectedManufacturer]);
+  const events = useMemo(() => {
+    const arr = Array.isArray(historyRes?.events) ? historyRes.events : [];
+    return arr;
+  }, [historyRes]);
 
   useEffect(() => {
     if (!isAuthed) return;
     if (!isRegulator) return;
-    if (activeTab === "manufacturers") loadManufacturers();
+    if (activeTab === "users") loadUsers();
     if (activeTab === "products") loadProducts();
-  }, [activeTab, isAuthed, isRegulator, loadManufacturers, loadProducts]);
+  }, [activeTab, isAuthed, isRegulator, loadUsers, loadProducts]);
+
+  const renderKeyValue = useCallback((k, v, opts = {}) => {
+    const value = String(v ?? "-");
+    const mono = opts.mono ? "mono" : "";
+    const clickable = Boolean(opts.copyValue);
+    return (
+      <div className={`r-kv-row ${clickable ? "clickable" : ""}`} key={k} onClick={clickable ? () => copyText(opts.copyValue) : undefined}>
+        <span className="r-k">{k}</span>
+        <span className={`r-v ${mono}`}>{value}</span>
+      </div>
+    );
+  }, [copyText]);
 
   return (
     <div className="r-shell">
@@ -563,8 +487,8 @@ function Regulator() {
         <div className="r-head-left">
           <div className="r-mark">Regulator</div>
           <div className="r-head-text">
-            <div className="r-title">Audit & Verification</div>
-            <div className="r-subtitle">Approve manufacturers, then verify products and accept or reject</div>
+            <div className="r-title">Audit & Approvals</div>
+            <div className="r-subtitle">Approve manufacturers and sellers, then review product history</div>
           </div>
         </div>
 
@@ -575,7 +499,9 @@ function Regulator() {
             </button>
           ) : (
             <>
-              <div className="r-session">{meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}</div>
+              <div className="r-session">
+                {meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}
+              </div>
               <button className="r-btn ghost" type="button" onClick={logout}>
                 Logout
               </button>
@@ -589,12 +515,12 @@ function Regulator() {
 
         <div className="r-tabs">
           <button
-            className={`r-tab-btn ${activeTab === "manufacturers" ? "active" : ""}`}
+            className={`r-tab-btn ${activeTab === "users" ? "active" : ""}`}
             type="button"
-            onClick={() => setActiveTab("manufacturers")}
+            onClick={() => setActiveTab("users")}
             disabled={!isRegulator}
           >
-            Manufacturer details
+            Users approval
           </button>
           <button
             className={`r-tab-btn ${activeTab === "products" ? "active" : ""}`}
@@ -606,48 +532,101 @@ function Regulator() {
           </button>
         </div>
 
-        {activeTab === "manufacturers" ? (
+        {activeTab === "users" ? (
           <section className="r-split">
             <div className="r-card">
               <div className="r-card-head">
                 <div>
-                  <div className="r-card-title">Manufacturer onboarding</div>
-                  <div className="r-card-sub">Approve or reject manufacturer registry requests</div>
+                  <div className="r-card-title">Approvals</div>
+                  <div className="r-card-sub">Choose role and status, then approve or reject</div>
                 </div>
-                <button className="r-btn ghost" type="button" onClick={loadManufacturers} disabled={manufacturersLoading || !isRegulator}>
-                  {manufacturersLoading ? "Refreshing..." : "Refresh"}
+                <button className="r-btn ghost" type="button" onClick={loadUsers} disabled={usersLoading || !isRegulator}>
+                  {usersLoading ? "Refreshing..." : "Refresh"}
                 </button>
+              </div>
+
+              <div className="r-toolbar">
+                <div className="r-seg">
+                  <button
+                    type="button"
+                    className={`r-seg-btn ${userRoleTab === "manufacturer" ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedUserId("");
+                      setUserRoleTab("manufacturer");
+                    }}
+                    disabled={!isRegulator}
+                  >
+                    Manufacturers
+                  </button>
+                  <button
+                    type="button"
+                    className={`r-seg-btn ${userRoleTab === "seller" ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedUserId("");
+                      setUserRoleTab("seller");
+                    }}
+                    disabled={!isRegulator}
+                  >
+                    Sellers
+                  </button>
+                </div>
+
+                <div className="r-filters">
+                  <select
+                    className="r-select"
+                    value={userStatusFilter}
+                    onChange={(e) => setUserStatusFilter(e.target.value)}
+                    disabled={!isRegulator || usersLoading}
+                  >
+                    <option value="PENDING">PENDING</option>
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="REJECTED">REJECTED</option>
+                    <option value="ALL">ALL</option>
+                  </select>
+
+                  <input
+                    className="r-input"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search by email, wallet, or id"
+                    disabled={!isRegulator}
+                  />
+                </div>
               </div>
 
               <div className="r-table-wrap">
                 <table className="r-table r-table-compact">
                   <thead>
                     <tr>
-                      <th>Company</th>
                       <th>Email</th>
                       <th>Wallet</th>
                       <th>Status</th>
+                      <th>Created</th>
                       <th className="ta-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {manufacturers.map((m) => {
-                      const id = manufacturerIdOf(m);
-                      const active = normalize(id) === normalize(selectedManufacturerId);
-                      const company = normalize(m?.company_name) || normalize(m?.company) || normalize(m?.name) || normalize(m?.manufacturer_name) || "-";
-                      const email = normalize(m?.email) || normalize(m?.manufacturer_email) || "-";
-                      const wallet = normalize(m?.wallet_address) || normalize(m?.wallet) || "-";
+                    {filteredUsers.map((u) => {
+                      const id = normalize(u?.id);
+                      const active = id && id === normalize(selectedUserId);
+                      const email = normalize(u?.email) || "-";
+                      const wallet = normalize(u?.wallet_address) || "-";
+                      const st = userStatusText(u);
+                      const createdAt = fmtDate(u?.created_at);
+
                       return (
-                        <tr key={id || email} className={active ? "active" : ""} onClick={() => setSelectedManufacturerId(id || email)}>
-                          <td>{company}</td>
-                          <td>{email}</td>
-                          <td className="mono">{wallet === "-" ? "-" : short(wallet, 10)}</td>
-                          <td>
-                            <span className={`r-pill ${manufacturerPillClass(m)}`}>{manufacturerStatusText(m)}</span>
+                        <tr key={id || email} className={active ? "active" : ""} onClick={() => setSelectedUserId(id)}>
+                          <td data-label="Email">{email}</td>
+                          <td data-label="Wallet" className="mono">
+                            {wallet === "-" ? "-" : shortWallet(wallet)}
                           </td>
-                          <td className="ta-right">
-                            <div className="r-row-actions" onClick={(e) => e.stopPropagation()}>
-                              <button className="r-btn small" type="button" onClick={() => setSelectedManufacturerId(id || email)}>
+                          <td data-label="Status">
+                            <span className={`r-pill ${userPillClass(u)}`}>{st}</span>
+                          </td>
+                          <td data-label="Created">{createdAt}</td>
+                          <td data-label="Actions" className="ta-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="r-row-actions">
+                              <button className="r-btn small" type="button" onClick={() => setSelectedUserId(id)}>
                                 View
                               </button>
                             </div>
@@ -656,10 +635,10 @@ function Regulator() {
                       );
                     })}
 
-                    {manufacturers.length === 0 ? (
+                    {filteredUsers.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="r-empty">
-                          {manufacturersLoading ? "Loading..." : "No pending manufacturers"}
+                          {usersLoading ? "Loading..." : "No users found"}
                         </td>
                       </tr>
                     ) : null}
@@ -672,61 +651,59 @@ function Regulator() {
               <div className="r-card-head">
                 <div>
                   <div className="r-card-title">Review & decision</div>
-                  <div className="r-card-sub">Selected manufacturer details and approval actions</div>
+                  <div className="r-card-sub">Only user table fields are shown</div>
                 </div>
               </div>
 
               <div className="r-section">
-                {selectedManufacturer ? (
+                {selectedUser ? (
                   <>
-                    <div className="r-kv">{manufacturerDetails.map(([k, v]) => renderKeyValue(k, v))}</div>
+                    <div className="r-kv">
+                      {selectedUserDetails.map(([k, v]) =>
+                        k === "wallet_address"
+                          ? renderKeyValue(k, v, { mono: true, copyValue: normalize(v) !== "-" ? v : "" })
+                          : renderKeyValue(k, v)
+                      )}
+                    </div>
 
                     <div className="r-actions">
+                      <button className="r-btn ghost" type="button" onClick={() => copyText(selectedUser.email)} disabled={!normalize(selectedUser.email)}>
+                        Copy Email
+                      </button>
                       <button
                         className="r-btn ghost"
                         type="button"
-                        onClick={() => copyText(normalize(selectedManufacturer?.wallet_address || selectedManufacturer?.wallet || ""))}
-                        disabled={!normalize(selectedManufacturer?.wallet_address || selectedManufacturer?.wallet || "")}
+                        onClick={() => copyText(selectedUser.wallet_address)}
+                        disabled={!normalize(selectedUser.wallet_address)}
                       >
                         Copy Wallet
                       </button>
-                      <button
-                        className="r-btn ghost"
-                        type="button"
-                        onClick={() => copyText(normalize(selectedManufacturer?.email || selectedManufacturer?.manufacturer_email || ""))}
-                        disabled={!normalize(selectedManufacturer?.email || selectedManufacturer?.manufacturer_email || "")}
-                      >
-                        Copy Email
-                      </button>
-                      <a className={`r-btn link ${manufacturerDocsUrl ? "" : "disabled"}`} href={manufacturerDocsUrl || "#"} target="_blank" rel="noreferrer">
-                        Open Documents (IPFS)
-                      </a>
                     </div>
 
                     <div className="r-field" style={{ marginTop: 12 }}>
-                      <div className="r-field-label">Reason / Notes</div>
+                      <div className="r-field-label">Notes</div>
                       <textarea
                         className="r-textarea"
-                        value={mDecisionReason}
-                        onChange={(e) => setMDecisionReason(e.target.value)}
-                        placeholder="Write reason for approve/reject (optional)"
-                        disabled={mActionLoading || !isRegulator}
+                        value={uDecisionNotes}
+                        onChange={(e) => setUDecisionNotes(e.target.value)}
+                        placeholder="Approval notes (optional)"
+                        disabled={uActionLoading || !isRegulator}
                         rows={4}
                       />
-                      <div className="r-hint">This will be sent if backend supports it.</div>
+                      <div className="r-hint">Saved to approval_notes</div>
                     </div>
 
                     <div className="r-actions">
-                      <button className="r-btn ghost" type="button" onClick={approveManufacturer} disabled={mActionLoading || !isRegulator}>
-                        {mActionLoading ? "Saving..." : "Approve manufacturer"}
+                      <button className="r-btn" type="button" onClick={approveUser} disabled={uActionLoading || !isRegulator}>
+                        {uActionLoading ? "Saving..." : "Approve"}
                       </button>
-                      <button className="r-btn danger" type="button" onClick={rejectManufacturer} disabled={mActionLoading || !isRegulator}>
-                        {mActionLoading ? "Saving..." : "Reject manufacturer"}
+                      <button className="r-btn danger" type="button" onClick={rejectUser} disabled={uActionLoading || !isRegulator}>
+                        {uActionLoading ? "Saving..." : "Reject"}
                       </button>
                     </div>
                   </>
                 ) : (
-                  <div className="r-empty-block">Select a manufacturer from the table to review and approve/reject.</div>
+                  <div className="r-empty-block">Select a user from the table to review and approve or reject.</div>
                 )}
               </div>
             </div>
@@ -737,7 +714,7 @@ function Regulator() {
               <div className="r-card-head">
                 <div>
                   <div className="r-card-title">Products</div>
-                  <div className="r-card-sub">Select a product, then approve or reject</div>
+                  <div className="r-card-sub">Audit products and view history</div>
                 </div>
                 <button className="r-btn ghost" type="button" onClick={loadProducts} disabled={productsLoading || !isRegulator}>
                   {productsLoading ? "Refreshing..." : "Refresh"}
@@ -760,21 +737,33 @@ function Regulator() {
                       const active = normalize(p.product_code) === normalize(selectedCode);
                       return (
                         <tr key={p.product_code} className={active ? "active" : ""} onClick={() => setSelectedCode(p.product_code)}>
-                          <td className="mono">{p.product_code}</td>
-                          <td>{p.name || "-"}</td>
-                          <td>{p.batch || "-"}</td>
-                          <td>
-                            <span className={`r-pill ${pillClass(p)}`}>{pillText(p)}</span>
+                          <td data-label="Code" className="mono">
+                            {p.product_code}
                           </td>
-                          <td className="ta-right">
-                            <div className="r-row-actions" onClick={(e) => e.stopPropagation()}>
+                          <td data-label="Name">{p.name || "-"}</td>
+                          <td data-label="Batch">{p.batch || "-"}</td>
+                          <td data-label="Status">
+                            <span className={`r-pill ${productPillClass(p)}`}>{productPillText(p)}</span>
+                          </td>
+                          <td data-label="Actions" className="ta-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="r-row-actions">
                               <button className="r-btn small" type="button" onClick={() => setSelectedCode(p.product_code)}>
                                 View
                               </button>
-                              <button className="r-btn small ghost" type="button" onClick={() => auditDecision(p.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                              <button
+                                className="r-btn small ghost"
+                                type="button"
+                                onClick={() => auditDecision(p.product_code, "ACCEPT")}
+                                disabled={actionLoading || !isRegulator}
+                              >
                                 Accept
                               </button>
-                              <button className="r-btn small danger" type="button" onClick={() => auditDecision(p.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                              <button
+                                className="r-btn small danger"
+                                type="button"
+                                onClick={() => auditDecision(p.product_code, "REJECT")}
+                                disabled={actionLoading || !isRegulator}
+                              >
                                 Reject
                               </button>
                             </div>
@@ -799,48 +788,33 @@ function Regulator() {
               <div className="r-card-head">
                 <div>
                   <div className="r-card-title">Selected product</div>
-                  <div className="r-card-sub">{selected ? `Code: ${selected.product_code}` : "Pick a product from the table"}</div>
+                  <div className="r-card-sub">{selectedProduct ? `Code: ${selectedProduct.product_code}` : "Pick a product"}</div>
                 </div>
               </div>
 
               <div className="r-section">
-                {selected ? (
+                {selectedProduct ? (
                   <>
-                    <div className="r-section-title">Document check (IPFS)</div>
+                    <div className="r-section-title">Product details</div>
                     <div className="r-kv">
-                      {renderKeyValue("ipfs_cid", selected.ipfs_cid || "-")}
-                      {renderKeyValue("certificate_sha256", certificateSha || "-")}
-                      {renderKeyValue("cloud_hash (DB)", selected.cloud_hash || "-")}
+                      {renderKeyValue("product_code", selectedProduct.product_code, { mono: true, copyValue: selectedProduct.product_code })}
+                      {renderKeyValue("name", selectedProduct.name || "-")}
+                      {renderKeyValue("batch", selectedProduct.batch || "-")}
+                      {renderKeyValue("ipfs_cid", selectedProduct.ipfs_cid || "-", { mono: true, copyValue: selectedProduct.ipfs_cid || "" })}
+                      {renderKeyValue("created_at", fmtDate(selectedProduct.created_at))}
                     </div>
 
                     <div className="r-actions">
-                      <button className="r-btn ghost" type="button" onClick={() => copyText(selected.ipfs_cid)} disabled={!selected.ipfs_cid}>
+                      <a className={`r-btn link ${ipfsUrl ? "" : "disabled"}`} href={ipfsUrl || "#"} target="_blank" rel="noreferrer">
+                        Open IPFS
+                      </a>
+                      <button className="r-btn ghost" type="button" onClick={() => copyText(selectedProduct.ipfs_cid)} disabled={!normalize(selectedProduct.ipfs_cid)}>
                         Copy CID
                       </button>
-                      <button className="r-btn ghost" type="button" onClick={() => copyText(certificateSha)} disabled={!certificateSha}>
-                        Copy Cert Hash
-                      </button>
-                      <a className={`r-btn link ${ipfsUrl ? "" : "disabled"}`} href={ipfsUrl || "#"} target="_blank" rel="noreferrer">
-                        Open IPFS File
-                      </a>
-                    </div>
-
-                    <div className="r-section-title" style={{ marginTop: 18 }}>
-                      Product check (Blockchain + DB)
-                    </div>
-                    <div className="r-kv">
-                      {renderKeyValue("product_code", selected.product_code)}
-                      {renderKeyValue("name", selected.name || "-")}
-                      {renderKeyValue("brand", brand || "-")}
-                      {renderKeyValue("current_state_hash", short(selected.current_state_hash, 12))}
-                      {renderKeyValue("nfc_uid_hash", short(selected.nfc_uid_hash, 12))}
-                    </div>
-
-                    <div className="r-actions">
                       <button className="r-btn" type="button" onClick={runScanForSelected} disabled={scanLoading}>
                         {scanLoading ? "Verifying..." : "Verify Authenticity"}
                       </button>
-                      <button className="r-btn ghost" type="button" onClick={() => loadHistory(selected.product_code)} disabled={historyLoading}>
+                      <button className="r-btn ghost" type="button" onClick={() => loadHistory(selectedProduct.product_code)} disabled={historyLoading}>
                         {historyLoading ? "Loading..." : "Refresh History"}
                       </button>
                     </div>
@@ -848,95 +822,76 @@ function Regulator() {
                     {scanRes?.verdict ? (
                       <div className="r-verdict">
                         <div className={`r-verdict-pill ${scanRes.verdict.isAuthentic ? "ok" : "bad"}`}>
-                          {scanRes.verdict.isAuthentic ? "AUTHENTIC (HASH MATCH)" : "NOT AUTHENTIC (MISMATCH)"}
+                          {scanRes.verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}
                         </div>
+                        <div className="r-verdict-msg">{normalize(scanRes.verdict.message) || "-"}</div>
                         <div className="r-kv tight">
-                          {renderKeyValue("isLatestDbState", String(scanRes.verdict.isLatestDbState))}
-                          {renderKeyValue("dbCloudHashMatches", String(scanRes.verdict.dbCloudHashMatches))}
-                          {renderKeyValue("chainCloudHashMatches", String(scanRes.verdict.chainCloudHashMatches))}
-                          {renderKeyValue("message", scanRes.verdict.message || "-")}
+                          {renderKeyValue("isLatestDbState", String(Boolean(scanRes.verdict.isLatestDbState)))}
+                          {renderKeyValue("dbCloudHashMatches", String(Boolean(scanRes.verdict.dbCloudHashMatches)))}
+                          {renderKeyValue("chainCloudHashMatches", String(Boolean(scanRes.verdict.chainCloudHashMatches)))}
                         </div>
                       </div>
                     ) : null}
-
-                    <div className="r-section-title" style={{ marginTop: 18 }}>
-                      Chain evidence
-                    </div>
-                    <div className="r-kv">
-                      {renderKeyValue("contract_address", chainContractAddress)}
-                      {renderKeyValue("register_tx_hash", chainRegisterTx)}
-                      {renderKeyValue("chain_cloud_hash", chainCloudHash)}
-                      {renderKeyValue("chain_nfc_uid_hash", chainNfcHash)}
-                    </div>
-
-                    <div className="r-actions">
-                      <button className="r-btn ghost" type="button" onClick={() => copyText(chainRegisterTx)} disabled={chainRegisterTx === "-"}>
-                        Copy Tx
-                      </button>
-                      <button className="r-btn ghost" type="button" onClick={() => copyText(chainContractAddress)} disabled={chainContractAddress === "-"}>
-                        Copy Contract
-                      </button>
-                    </div>
 
                     <div className="r-section-title" style={{ marginTop: 18 }}>
                       Audit decision
                     </div>
 
                     <div className="r-field">
-                      <div className="r-field-label">Reason / Evidence</div>
+                      <div className="r-field-label">Reason</div>
                       <textarea
                         className="r-textarea"
                         value={auditReason}
                         onChange={(e) => setAuditReason(e.target.value)}
-                        placeholder="Write why you accept or reject"
+                        placeholder="Write why you accept or reject (optional)"
                         disabled={actionLoading || !isRegulator}
                         rows={4}
                       />
-                      <div className="r-hint">If backend supports it, the reason will be saved. If not, decision will still work.</div>
                     </div>
 
                     <div className="r-actions">
-                      <button className="r-btn ghost" type="button" onClick={() => auditDecision(selected.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
-                        Accept as Original
+                      <button className="r-btn ghost" type="button" onClick={() => auditDecision(selectedProduct.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                        Accept
                       </button>
-                      <button className="r-btn danger" type="button" onClick={() => auditDecision(selected.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
-                        Mark as Duplicate
+                      <button className="r-btn danger" type="button" onClick={() => auditDecision(selectedProduct.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                        Reject
                       </button>
                     </div>
 
                     <div className="r-section-title" style={{ marginTop: 18 }}>
-                      Full history
+                      History
                     </div>
 
                     {historyRes ? (
                       <>
-                        <div className="r-kv">
-                          {renderKeyValue("product_code", historyRes.product?.product_code || selected.product_code)}
-                          {renderKeyValue("current_state_hash", historyRes.product?.current_state_hash || selected.current_state_hash || "-")}
-                          {renderKeyValue("ipfs_cid", historyRes.product?.ipfs_cid || selected.ipfs_cid || "-")}
+                        <div className="r-history-summary">
+                          <div className="r-sum">
+                            <div className="r-sum-k">Events</div>
+                            <div className="r-sum-v">{events.length}</div>
+                          </div>
+                          <div className="r-sum">
+                            <div className="r-sum-k">Last update</div>
+                            <div className="r-sum-v">{events[0]?.created_at ? fmtDate(events[0].created_at) : "-"}</div>
+                          </div>
                         </div>
 
                         <div className="r-events">
                           {events.map((ev) => (
                             <div className="r-ev" key={ev.id || `${ev.event_type}-${ev.created_at}`}>
                               <div className="r-ev-top">
-                                <div className="r-ev-type">{ev.event_type}</div>
-                                <div className="r-ev-time">{ev.created_at ? new Date(ev.created_at).toLocaleString() : "-"}</div>
+                                <div className="r-ev-type">{ev.event_type || "EVENT"}</div>
+                                <div className="r-ev-time">{ev.created_at ? fmtDate(ev.created_at) : "-"}</div>
                               </div>
                               <div className="r-ev-body">
                                 <div className="r-ev-row">
                                   <span>actor</span>
                                   <span>
-                                    {ev.actor_email || "-"} ({ev.actor_role || "-"})
+                                    {ev.actor_email || "-"} {ev.actor_role ? `(${ev.actor_role})` : ""}
                                   </span>
                                 </div>
                                 <div className="r-ev-row">
-                                  <span>tx</span>
-                                  <span className="mono">{ev.chain_tx_hash || "null"}</span>
-                                </div>
-                                <div className="r-ev-row">
                                   <span>notes</span>
-                                  <span>{ev.notes || ""}</span>
+                                  <span>{ev.notes || "-"}</span>
                                 </div>
                               </div>
                             </div>
@@ -949,7 +904,7 @@ function Regulator() {
                     )}
                   </>
                 ) : (
-                  <div className="r-placeholder">Pick a product from the table to verify documents, authenticity, and history.</div>
+                  <div className="r-placeholder">Pick a product from the table to review and see history.</div>
                 )}
               </div>
             </div>

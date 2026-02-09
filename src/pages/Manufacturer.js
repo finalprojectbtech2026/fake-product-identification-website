@@ -211,13 +211,6 @@ function Manufacturer() {
     return u.toString();
   }, []);
 
-  const short = useCallback((v, n = 10) => {
-    const s = normalize(v);
-    if (!s) return "-";
-    if (s.length <= n * 2 + 3) return s;
-    return `${s.slice(0, n)}...${s.slice(-n)}`;
-  }, []);
-
   const copyText = useCallback(
     async (text) => {
       const t = normalize(text);
@@ -236,6 +229,7 @@ function Manufacturer() {
     const v = normalize(t).toUpperCase();
     if (v === "APPROVED" || v === "ACTIVE" || v === "ACCEPT") return "ok";
     if (v === "REJECTED" || v === "REJECT") return "bad";
+    if (v === "PENDING") return "warn";
     return "neutral";
   }, []);
 
@@ -599,31 +593,6 @@ function Manufacturer() {
     make();
   }, [registerRes, buildQrUrl]);
 
-  const chainContractAddress = useMemo(() => {
-    const v = scanRes?.chain?.contract_address || scanRes?.chain?.contractAddress || "";
-    return normalize(v) || "-";
-  }, [scanRes]);
-
-  const chainRegisterTx = useMemo(() => {
-    const v =
-      selected?.chain_register_tx_hash ||
-      selected?.chainRegisterTxHash ||
-      scanRes?.chain?.register_tx_hash ||
-      scanRes?.chain?.registerTxHash ||
-      "";
-    return normalize(v) || "-";
-  }, [selected, scanRes]);
-
-  const chainCloudHash = useMemo(() => {
-    const v = scanRes?.chain?.cloud_hash || scanRes?.chain?.cloudHash || "";
-    return normalize(v) || "-";
-  }, [scanRes]);
-
-  const chainNfcHash = useMemo(() => {
-    const v = scanRes?.chain?.nfc_uid_hash || scanRes?.chain?.nfcUidHash || "";
-    return normalize(v) || "-";
-  }, [scanRes]);
-
   const verdict = scanRes?.verdict || null;
 
   const events = useMemo(() => {
@@ -656,6 +625,7 @@ function Manufacturer() {
     const st = normalize(selected?.audit_status).toUpperCase();
     if (st === "ACCEPT") return "ok";
     if (st === "REJECT") return "bad";
+    if (st === "PENDING") return "warn";
     return "neutral";
   }, [selected]);
 
@@ -668,13 +638,35 @@ function Manufacturer() {
     );
   }, []);
 
+  const TopIcon = useMemo(() => {
+    return (
+      <svg className="mfg-mark" width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M12 2.4c5.3 0 9.6 4.3 9.6 9.6S17.3 21.6 12 21.6 2.4 17.3 2.4 12 6.7 2.4 12 2.4Z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        />
+        <path
+          d="M7.6 12.2l2.6 2.6L16.6 8.6"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }, []);
+
   return (
     <div className="mfg-shell">
       <Navbar />
 
       <header className="mfg-header">
         <div className="mfg-hl">
-          <div className="mfg-badge">Manufacturer</div>
+          <div className="mfg-badge">
+            {TopIcon}
+            <span>Manufacturer</span>
+          </div>
           <div className="mfg-ht">
             <div className="mfg-title">Registry & Product Operations</div>
             <div className="mfg-subtitle">Register products, generate QR, and keep verification evidence ready</div>
@@ -698,11 +690,37 @@ function Manufacturer() {
       </header>
 
       <main className="mfg-main">
-        {error ? <div className="mfg-alert">{error}</div> : null}
+        {error ? (
+          <div className="mfg-alert">
+            <div className="mfg-alert-ic">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 9v5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M12 17.6h.01"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M10.2 4.7h3.6c.8 0 1.6.4 2.1 1.1l6 9.1c.9 1.4-.1 3.1-1.8 3.1H3.9c-1.7 0-2.7-1.7-1.8-3.1l6-9.1c.5-.7 1.3-1.1 2.1-1.1Z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <div className="mfg-alert-txt">{error}</div>
+          </div>
+        ) : null}
 
         {!isAuthed ? (
           <div className="mfg-center">
-            <div className="mfg-card">
+            <div className="mfg-card mfg-card-lg">
               <div className="mfg-card-head">
                 <div>
                   <div className="mfg-card-title">Login required</div>
@@ -712,11 +730,16 @@ function Manufacturer() {
                   Login
                 </button>
               </div>
+              <div className="mfg-card-body">
+                <div className="mfg-emptyblock">
+                  You are currently not authenticated. Login to access product registration, QR generation, and verification history.
+                </div>
+              </div>
             </div>
           </div>
         ) : !isManufacturer ? (
           <div className="mfg-center">
-            <div className="mfg-card">
+            <div className="mfg-card mfg-card-lg">
               <div className="mfg-card-head">
                 <div>
                   <div className="mfg-card-title">Access restricted</div>
@@ -725,6 +748,11 @@ function Manufacturer() {
                 <button className="mfg-btn" type="button" onClick={() => navigate("/auth")}>
                   Switch account
                 </button>
+              </div>
+              <div className="mfg-card-body">
+                <div className="mfg-emptyblock">
+                  Your current session is not a Manufacturer role. Use a Manufacturer account to access this portal.
+                </div>
               </div>
             </div>
           </div>
@@ -740,7 +768,10 @@ function Manufacturer() {
                       : "Your registry request is pending regulator approval. You can view your profile details below."}
                   </div>
                 </div>
-                <span className={`mfg-pill ${pillClass(approvalText)}`}>{approvalText}</span>
+                <span className={`mfg-pill ${pillClass(approvalText)}`}>
+                  <span className="mfg-dot" />
+                  {approvalText}
+                </span>
               </div>
 
               <div className="mfg-card-body">
@@ -783,7 +814,10 @@ function Manufacturer() {
               </div>
 
               <div className="mfg-topbar-right">
-                <span className={`mfg-pill ${pillClass(approvalText)}`}>{approvalText}</span>
+                <span className={`mfg-pill ${pillClass(approvalText)}`}>
+                  <span className="mfg-dot" />
+                  {approvalText}
+                </span>
                 <button className="mfg-btn ghost" type="button" onClick={loadProducts} disabled={productsLoading}>
                   {productsLoading ? "Refreshing..." : "Refresh products"}
                 </button>
@@ -799,6 +833,9 @@ function Manufacturer() {
                         <div>
                           <div className="mfg-card-title">Your profile</div>
                           <div className="mfg-card-sub">Account identity and registry status.</div>
+                        </div>
+                        <div className="mfg-head-meta">
+                          <span className="mfg-chip">{(me?.role || authUser?.role || "user").toString()}</span>
                         </div>
                       </div>
                       <div className="mfg-card-body">
@@ -835,13 +872,36 @@ function Manufacturer() {
                       <div className="mfg-card-body">
                         <div className="mfg-field">
                           <div className="mfg-label">Seller wallet address</div>
-                          <input
-                            className="mfg-input mono"
-                            value={sellerWallet}
-                            onChange={(e) => setSellerWallet(e.target.value)}
-                            placeholder="0x..."
-                            disabled={sellerVerifying}
-                          />
+                          <div className="mfg-input-wrap">
+                            <span className="mfg-input-ic">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path
+                                  d="M4.5 7.4c0-1 .8-1.8 1.8-1.8h11.4c1 0 1.8.8 1.8 1.8v9.2c0 1-.8 1.8-1.8 1.8H6.3c-1 0-1.8-.8-1.8-1.8V7.4Z"
+                                  stroke="currentColor"
+                                  strokeWidth="1.6"
+                                />
+                                <path
+                                  d="M14.2 12h5.1"
+                                  stroke="currentColor"
+                                  strokeWidth="1.6"
+                                  strokeLinecap="round"
+                                />
+                                <path
+                                  d="M6.8 12h4.8"
+                                  stroke="currentColor"
+                                  strokeWidth="1.6"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </span>
+                            <input
+                              className="mfg-input mono"
+                              value={sellerWallet}
+                              onChange={(e) => setSellerWallet(e.target.value)}
+                              placeholder="0x..."
+                              disabled={sellerVerifying}
+                            />
+                          </div>
                           <div className="mfg-hint">This checks seller presence or eligibility based on backend rules.</div>
                         </div>
 
@@ -882,6 +942,7 @@ function Manufacturer() {
                           <div className="mfg-card-title">Register a product</div>
                           <div className="mfg-card-sub">Upload certificate (optional), bind NFC UID, then register.</div>
                         </div>
+                        <span className="mfg-chip soft">Step by step</span>
                       </div>
 
                       <div className="mfg-card-body">
@@ -971,28 +1032,10 @@ function Manufacturer() {
                                 <div className="mfg-result-title">Registration result</div>
                                 <div className="mfg-result-sub">Database, blockchain evidence, and QR link.</div>
                               </div>
-                              <span className="mfg-pill neutral">NEW</span>
-                            </div>
-
-                            <div className="mfg-result-grid">
-                              <div className="mfg-result-card">
-                                <div className="mfg-result-card-title">Database</div>
-                                <div className="mfg-kv compact">
-                                  {renderKV("product_code", registerRes.product?.product_code || "-", true)}
-                                  {renderKV("current_state_hash", registerRes.product?.current_state_hash || "-", true)}
-                                  {renderKV("ipfs_cid", registerRes.product?.ipfs_cid || "-", true)}
-                                  {renderKV("cloud_hash", registerRes.product?.cloud_hash || "-", true)}
-                                  {renderKV("nfc_uid_hash", registerRes.product?.nfc_uid_hash || "-", true)}
-                                </div>
-                              </div>
-
-                              <div className="mfg-result-card">
-                                <div className="mfg-result-card-title">Blockchain</div>
-                                <div className="mfg-kv compact">
-                                  {renderKV("register_tx_hash", registerRes.chain?.register_tx_hash || "-", true)}
-                                  {renderKV("contract_address", registerRes.chain?.contract_address || "-", true)}
-                                </div>
-                              </div>
+                              <span className="mfg-pill neutral">
+                                <span className="mfg-dot" />
+                                NEW
+                              </span>
                             </div>
 
                             <div className="mfg-qrbox">
@@ -1073,14 +1116,17 @@ function Manufacturer() {
                             const active = normalize(p?.product_code) === normalize(selectedCode);
                             const st = normalize(p?.audit_status).toUpperCase();
                             const statusText = st ? st : "PENDING";
-                            const statusClass = st === "ACCEPT" ? "ok" : st === "REJECT" ? "bad" : "neutral";
+                            const statusClass = st === "ACCEPT" ? "ok" : st === "REJECT" ? "bad" : "warn";
                             return (
                               <tr key={p.product_code} className={active ? "active" : ""} onClick={() => setSelectedCode(p.product_code)}>
                                 <td className="mono">{p.product_code}</td>
                                 <td>{p.name || "-"}</td>
                                 <td>{p.batch || "-"}</td>
                                 <td>
-                                  <span className={`mfg-pill ${statusClass}`}>{statusText}</span>
+                                  <span className={`mfg-pill ${statusClass}`}>
+                                    <span className="mfg-dot" />
+                                    {statusText}
+                                  </span>
                                 </td>
                               </tr>
                             );
@@ -1104,7 +1150,12 @@ function Manufacturer() {
                         <div className="mfg-card-title">Selected product</div>
                         <div className="mfg-card-sub">{selected ? `Code: ${selected.product_code}` : "Select a product from the table"}</div>
                       </div>
-                      {selected ? <span className={`mfg-pill ${selectedStatusClass}`}>{selectedStatus}</span> : null}
+                      {selected ? (
+                        <span className={`mfg-pill ${selectedStatusClass}`}>
+                          <span className="mfg-dot" />
+                          {selectedStatus}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="mfg-card-body">
@@ -1118,11 +1169,6 @@ function Manufacturer() {
                                 {renderKV("name", selected.name || "-")}
                                 {renderKV("brand", selectedBrand || "-")}
                                 {renderKV("batch", selected.batch || "-")}
-                                {renderKV("ipfs_cid", selected.ipfs_cid || "-", true)}
-                                {renderKV("certificate_sha256", selectedCertSha || "-", true)}
-                                {renderKV("cloud_hash (DB)", selected.cloud_hash || "-", true)}
-                                {renderKV("current_state_hash", short(selected.current_state_hash, 12), true)}
-                                {renderKV("nfc_uid_hash (DB)", short(selected.nfc_uid_hash, 12), true)}
                                 {renderKV("notes", selectedNotes || "-")}
                               </div>
 
@@ -1178,6 +1224,7 @@ function Manufacturer() {
                               {verdict ? (
                                 <div className="mfg-verdict">
                                   <div className={`mfg-verdict-pill ${verdict.isAuthentic ? "ok" : "bad"}`}>
+                                    <span className="mfg-dot" />
                                     {verdict.isAuthentic ? "AUTHENTIC (HASH MATCH)" : "NOT AUTHENTIC (MISMATCH)"}
                                   </div>
                                   <div className="mfg-kv compact" style={{ marginTop: 10 }}>
@@ -1187,28 +1234,10 @@ function Manufacturer() {
                                     {renderKV("message", verdict.message || "-")}
                                   </div>
                                 </div>
-                              ) : (
-                                <div className="mfg-emptyblock">Run verification to see chain and cloud hash comparisons.</div>
-                              )}
+                              ) : null}
                             </div>
 
-                            <div className="mfg-softbox">
-                              <div className="mfg-softbox-title">Chain evidence</div>
-                              <div className="mfg-kv compact">
-                                {renderKV("contract_address", chainContractAddress, true)}
-                                {renderKV("register_tx_hash", chainRegisterTx, true)}
-                                {renderKV("chain_cloud_hash", chainCloudHash, true)}
-                                {renderKV("chain_nfc_uid_hash", chainNfcHash, true)}
-                              </div>
-                              <div className="mfg-actions">
-                                <button className="mfg-btn ghost" type="button" onClick={() => copyText(chainRegisterTx)} disabled={chainRegisterTx === "-"}>
-                                  Copy Tx
-                                </button>
-                                <button className="mfg-btn ghost" type="button" onClick={() => copyText(chainContractAddress)} disabled={chainContractAddress === "-"}>
-                                  Copy Contract
-                                </button>
-                              </div>
-                            </div>
+                            
                           </div>
 
                           <div className="mfg-softbox">
@@ -1217,8 +1246,7 @@ function Manufacturer() {
                               <>
                                 <div className="mfg-kv compact" style={{ marginBottom: 10 }}>
                                   {renderKV("product_code", historyRes.product?.product_code || selected.product_code, true)}
-                                  {renderKV("current_state_hash", historyRes.product?.current_state_hash || selected.current_state_hash || "-", true)}
-                                  {renderKV("ipfs_cid", historyRes.product?.ipfs_cid || selected.ipfs_cid || "-", true)}
+                                  
                                 </div>
 
                                 <div className="mfg-events">
@@ -1268,7 +1296,9 @@ function Manufacturer() {
 
       <footer className="mfg-footer">
         <div>© {new Date().getFullYear()} Fake Product Identification</div>
-        <div className="mfg-foot-note">Manufacturer View</div>
+        <div className="mfg-foot-note">
+          <span className="mfg-chip soft">Manufacturer View</span>
+        </div>
       </footer>
 
       {toast ? <div className="mfg-toast">{toast}</div> : null}

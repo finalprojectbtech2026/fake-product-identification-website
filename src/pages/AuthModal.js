@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaIndustry, FaGavel, FaStore, FaUserCheck, FaArrowRight, FaShieldAlt, FaBolt, FaCheckCircle } from "react-icons/fa";
+import { FaIndustry, FaGavel, FaStore, FaUserCheck, FaArrowRight, FaCheckCircle, FaLock, FaUserPlus } from "react-icons/fa";
 import Navbar from "./Navbar";
 import "./AuthModal.css";
 
@@ -10,20 +10,21 @@ const roles = [
   { key: "manufacturer", title: "Manufacturer", icon: FaIndustry, desc: "Register products and publish authenticity proofs." },
   { key: "seller", title: "Seller", icon: FaStore, desc: "Verify inventory and record supply chain actions." },
   { key: "regulator", title: "Regulator", icon: FaGavel, desc: "Audit history and compliance signals quickly." },
-  { key: "customer", title: "Customer", icon: FaUserCheck, desc: "Scan and verify a product before purchase." }
+  { key: "customer", title: "Consumer", icon: FaUserCheck, desc: "Scan and verify a product before purchase." }
 ];
 
 function AuthPage() {
   const navigate = useNavigate();
+
   const [tab, setTab] = useState("login");
   const [roleKey, setRoleKey] = useState("manufacturer");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const roleTitle = useMemo(() => roles.find((r) => r.key === roleKey)?.title || "User", [roleKey]);
 
   const validateEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
@@ -52,8 +53,31 @@ function AuthPage() {
     return true;
   };
 
+  const activeRole = useMemo(() => roles.find((r) => r.key === roleKey) || roles[0], [roleKey]);
+  const roleTitle = useMemo(() => activeRole?.title || "User", [activeRole]);
+
+  const onRoleSelect = (key) => {
+    if (loading) return;
+    if (key === "customer") {
+      navigate("/customer");
+      return;
+    }
+    setError("");
+    setRoleKey(key);
+  };
+
+  const approvalGateError = (serverRole, approvalStatus) => {
+    const r = String(serverRole || "").toLowerCase().trim();
+    const st = String(approvalStatus || "").toUpperCase().trim();
+    if ((r === "manufacturer" || r === "seller") && st !== "APPROVED") {
+      return `${roleTitle} account is not approved yet. Current status: ${st || "PENDING"}. Please wait for Regulator approval.`;
+    }
+    return "";
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError("");
 
     const e1 = email.trim().toLowerCase();
@@ -80,14 +104,24 @@ function AuthPage() {
           return setError(data?.message || "Signup failed");
         }
 
+        const serverRole = String(data?.user?.role || "").toLowerCase().trim();
+        const st = String(data?.user?.approval_status || "").toUpperCase().trim();
+
+        const gateMsg = approvalGateError(serverRole, st);
+        if (gateMsg) {
+          localStorage.removeItem("auth_token");
+          localStorage.removeItem("auth_user");
+          setLoading(false);
+          return setError(gateMsg);
+        }
+
         if (!persistSession(data)) {
           setLoading(false);
           return setError("Signup succeeded but session data is missing");
         }
 
-        const next = roleRoute(data.user.role);
         setLoading(false);
-        navigate(next);
+        navigate(roleRoute(data.user.role));
         return;
       }
 
@@ -106,6 +140,7 @@ function AuthPage() {
 
       const serverRole = String(data?.user?.role || "").toLowerCase().trim();
       const selectedRole = String(roleKey || "").toLowerCase().trim();
+      const st = String(data?.user?.approval_status || "").toUpperCase().trim();
 
       if (!serverRole) {
         setLoading(false);
@@ -117,113 +152,114 @@ function AuthPage() {
         return setError(`This account is registered as ${serverRole}, not ${roleTitle}`);
       }
 
+      const gateMsg = approvalGateError(serverRole, st);
+      if (gateMsg) {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("auth_user");
+        setLoading(false);
+        return setError(gateMsg);
+      }
+
       if (!persistSession(data)) {
         setLoading(false);
         return setError("Login succeeded but session data is missing");
       }
 
-      const next = roleRoute(serverRole);
       setLoading(false);
-      navigate(next);
+      navigate(roleRoute(serverRole));
     } catch {
       setLoading(false);
       setError("Network error, please try again");
     }
   };
 
-  const activeRole = useMemo(() => roles.find((r) => r.key === roleKey) || roles[0], [roleKey]);
+  const showApprovalHint = useMemo(() => {
+    const r = String(roleKey || "").toLowerCase().trim();
+    return r === "manufacturer" || r === "seller";
+  }, [roleKey]);
 
   return (
     <div className="authp-page">
       <Navbar />
 
       <div className="authx-shell">
-        <div className="authx-bg" />
-        <div className="authx-noise" />
         <div className="authx-wrap">
-          <div className="authx-card">
-            <div className="authx-head">
-              <div className="authx-brand">
-                <div className="authx-badge">
+          <div className="authx-grid">
+            <div className="authx-left">
+              <div className="authx-leftHead">
+                <div className="authx-mark">
                   <FaCheckCircle />
                 </div>
-                <div>
-                  <div className="authx-title">{tab === "login" ? "Welcome back" : "Create your account"}</div>
-                  <div className="authx-sub">Choose your role and continue.</div>
+                <div className="authx-leftTxt">
+                  <div className="authx-leftTitle">Choose your role</div>
+                  <div className="authx-leftSub">Then login or create an account. Consumer access is instant.</div>
                 </div>
               </div>
 
-              <div className="authx-tabs" role="tablist" aria-label="auth tabs">
-                <button
-                  type="button"
-                  className={`authx-tab ${tab === "login" ? "active" : ""}`}
-                  onClick={() => setTab("login")}
-                  disabled={loading}
-                >
-                  Login
-                </button>
-                <button
-                  type="button"
-                  className={`authx-tab ${tab === "signup" ? "active" : ""}`}
-                  onClick={() => setTab("signup")}
-                  disabled={loading}
-                >
-                  Signup
-                </button>
-              </div>
-            </div>
-
-            <div className="authx-body">
-              <div className="authx-roles">
+              <div className="authx-roles2x2" aria-label="roles">
                 {roles.map((r) => {
                   const Icon = r.icon;
                   const active = r.key === roleKey;
+                  const isConsumer = r.key === "customer";
                   return (
                     <button
                       key={r.key}
                       type="button"
-                      className={`authx-role ${active ? "active" : ""}`}
-                      onClick={() => setRoleKey(r.key)}
+                      className={`authx-roleCard ${active ? "active" : ""} ${isConsumer ? "consumer" : ""}`}
+                      onClick={() => onRoleSelect(r.key)}
                       disabled={loading}
                     >
-                      <div className="authx-role-ico">
-                        <Icon />
+                      <div className="authx-roleTop">
+                        <div className="authx-roleIcon">
+                          <Icon />
+                        </div>
+                        {isConsumer ? <div className="authx-pill">No login</div> : null}
                       </div>
-                      <div className="authx-role-meta">
-                        <div className="authx-role-name">{r.title}</div>
-                        <div className="authx-role-desc">{r.desc}</div>
+                      <div className="authx-roleName">{r.title}</div>
+                      <div className="authx-roleDesc">{r.desc}</div>
+                      <div className="authx-roleCta">
+                        <span>{isConsumer ? "Open" : "Select"}</span>
+                        <FaArrowRight />
                       </div>
                     </button>
                   );
                 })}
               </div>
+            </div>
 
-              <div className="authx-formwrap">
-                <div className="authx-side">
-                  <div className="authx-side-card">
-                    <div className="authx-side-title">{activeRole.title}</div>
-                    <div className="authx-side-desc">{activeRole.desc}</div>
-
-                    <div className="authx-points">
-                      <div className="authx-point">
-                        <span className="authx-point-ico">
-                          <FaShieldAlt />
-                        </span>
-                        <span className="authx-point-text">Tamper-resistant history checks</span>
-                      </div>
-                      <div className="authx-point">
-                        <span className="authx-point-ico">
-                          <FaBolt />
-                        </span>
-                        <span className="authx-point-text">Fast verification responses</span>
-                      </div>
+            <div className="authx-right">
+              <div className="authx-card">
+                <div className="authx-head">
+                  <div className="authx-headLeft">
+                    <div className="authx-headTitle">{tab === "login" ? "Welcome back" : "Create your account"}</div>
+                    <div className="authx-headSub">
+                      Role: <span className="authx-headRole">{activeRole.title}</span>
                     </div>
+                  </div>
 
-                    <button className="authx-back" type="button" onClick={() => navigate("/")} disabled={loading}>
-                      Back to Home
+                  <div className="authx-tabs" role="tablist" aria-label="auth tabs">
+                    <button
+                      type="button"
+                      className={`authx-tab ${tab === "login" ? "active" : ""}`}
+                      onClick={() => setTab("login")}
+                      disabled={loading}
+                    >
+                      <FaLock />
+                      <span>Login</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`authx-tab ${tab === "signup" ? "active" : ""}`}
+                      onClick={() => setTab("signup")}
+                      disabled={loading}
+                    >
+                      <FaUserPlus />
+                      <span>Signup</span>
                     </button>
                   </div>
                 </div>
+
+                
 
                 <form className="authx-form" onSubmit={onSubmit}>
                   <div className="authx-field">
@@ -273,8 +309,6 @@ function AuthPage() {
                     <span>{loading ? "Please wait..." : tab === "login" ? "Continue" : "Create Account"}</span>
                     <FaArrowRight />
                   </button>
-
-                  <div className="authx-note">Your session is stored securely and verified using JWT.</div>
                 </form>
               </div>
             </div>

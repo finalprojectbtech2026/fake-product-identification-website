@@ -173,11 +173,6 @@ function AuthPage() {
     }
   };
 
-  const showApprovalHint = useMemo(() => {
-    const r = String(roleKey || "").toLowerCase().trim();
-    return r === "manufacturer" || r === "seller";
-  }, [roleKey]);
-
   return (
     <div className="authp-page">
       <Navbar />
@@ -258,8 +253,6 @@ function AuthPage() {
                     </button>
                   </div>
                 </div>
-
-                
 
                 <form className="authx-form" onSubmit={onSubmit}>
                   <div className="authx-field">

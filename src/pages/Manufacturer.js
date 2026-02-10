@@ -641,18 +641,8 @@ function Manufacturer() {
   const TopIcon = useMemo(() => {
     return (
       <svg className="mfg-mark" width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M12 2.4c5.3 0 9.6 4.3 9.6 9.6S17.3 21.6 12 21.6 2.4 17.3 2.4 12 6.7 2.4 12 2.4Z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-        />
-        <path
-          d="M7.6 12.2l2.6 2.6L16.6 8.6"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        <path d="M12 2.4c5.3 0 9.6 4.3 9.6 9.6S17.3 21.6 12 21.6 2.4 17.3 2.4 12 6.7 2.4 12 2.4Z" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M7.6 12.2l2.6 2.6L16.6 8.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   }, []);
@@ -694,18 +684,8 @@ function Manufacturer() {
           <div className="mfg-alert">
             <div className="mfg-alert-ic">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 9v5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M12 17.6h.01"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
+                <path d="M12 9v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path d="M12 17.6h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                 <path
                   d="M10.2 4.7h3.6c.8 0 1.6.4 2.1 1.1l6 9.1c.9 1.4-.1 3.1-1.8 3.1H3.9c-1.7 0-2.7-1.7-1.8-3.1l6-9.1c.5-.7 1.3-1.1 2.1-1.1Z"
                   stroke="currentColor"
@@ -731,9 +711,7 @@ function Manufacturer() {
                 </button>
               </div>
               <div className="mfg-card-body">
-                <div className="mfg-emptyblock">
-                  You are currently not authenticated. Login to access product registration, QR generation, and verification history.
-                </div>
+                <div className="mfg-emptyblock">You are currently not authenticated. Login to access product registration, QR generation, and verification history.</div>
               </div>
             </div>
           </div>
@@ -750,9 +728,7 @@ function Manufacturer() {
                 </button>
               </div>
               <div className="mfg-card-body">
-                <div className="mfg-emptyblock">
-                  Your current session is not a Manufacturer role. Use a Manufacturer account to access this portal.
-                </div>
+                <div className="mfg-emptyblock">Your current session is not a Manufacturer role. Use a Manufacturer account to access this portal.</div>
               </div>
             </div>
           </div>
@@ -763,9 +739,7 @@ function Manufacturer() {
                 <div>
                   <div className="mfg-card-title">Registry approval</div>
                   <div className="mfg-card-sub">
-                    {isRejected
-                      ? "Your registry request was rejected. Contact the regulator or re-register."
-                      : "Your registry request is pending regulator approval. You can view your profile details below."}
+                    {isRejected ? "Your registry request was rejected. Contact the regulator or re-register." : "Your registry request is pending regulator approval. You can view your profile details below."}
                   </div>
                 </div>
                 <span className={`mfg-pill ${pillClass(approvalText)}`}>
@@ -778,20 +752,10 @@ function Manufacturer() {
                 <div className="mfg-kv">{meDetails.map(([k, v]) => renderKV(k, v, k === "wallet_address" || k === "user_id"))}</div>
 
                 <div className="mfg-actions">
-                  <button
-                    className="mfg-btn ghost"
-                    type="button"
-                    onClick={() => copyText(me?.wallet_address || authUser?.wallet_address || "")}
-                    disabled={!normalize(me?.wallet_address || authUser?.wallet_address || "")}
-                  >
+                  <button className="mfg-btn ghost" type="button" onClick={() => copyText(me?.wallet_address || authUser?.wallet_address || "")} disabled={!normalize(me?.wallet_address || authUser?.wallet_address || "")}>
                     Copy Wallet
                   </button>
-                  <button
-                    className="mfg-btn ghost"
-                    type="button"
-                    onClick={() => copyText(me?.email || authUser?.email || "")}
-                    disabled={!normalize(me?.email || authUser?.email || "")}
-                  >
+                  <button className="mfg-btn ghost" type="button" onClick={() => copyText(me?.email || authUser?.email || "")} disabled={!normalize(me?.email || authUser?.email || "")}>
                     Copy Email
                   </button>
                   <button className="mfg-btn ghost" type="button" onClick={loadProducts} disabled={productsLoading}>
@@ -841,20 +805,10 @@ function Manufacturer() {
                       <div className="mfg-card-body">
                         <div className="mfg-kv">{meDetails.map(([k, v]) => renderKV(k, v, k === "wallet_address" || k === "user_id"))}</div>
                         <div className="mfg-actions">
-                          <button
-                            className="mfg-btn ghost"
-                            type="button"
-                            onClick={() => copyText(me?.wallet_address || authUser?.wallet_address || "")}
-                            disabled={!normalize(me?.wallet_address || authUser?.wallet_address || "")}
-                          >
+                          <button className="mfg-btn ghost" type="button" onClick={() => copyText(me?.wallet_address || authUser?.wallet_address || "")} disabled={!normalize(me?.wallet_address || authUser?.wallet_address || "")}>
                             Copy Wallet
                           </button>
-                          <button
-                            className="mfg-btn ghost"
-                            type="button"
-                            onClick={() => copyText(me?.email || authUser?.email || "")}
-                            disabled={!normalize(me?.email || authUser?.email || "")}
-                          >
+                          <button className="mfg-btn ghost" type="button" onClick={() => copyText(me?.email || authUser?.email || "")} disabled={!normalize(me?.email || authUser?.email || "")}>
                             Copy Email
                           </button>
                         </div>
@@ -875,32 +829,12 @@ function Manufacturer() {
                           <div className="mfg-input-wrap">
                             <span className="mfg-input-ic">
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                <path
-                                  d="M4.5 7.4c0-1 .8-1.8 1.8-1.8h11.4c1 0 1.8.8 1.8 1.8v9.2c0 1-.8 1.8-1.8 1.8H6.3c-1 0-1.8-.8-1.8-1.8V7.4Z"
-                                  stroke="currentColor"
-                                  strokeWidth="1.6"
-                                />
-                                <path
-                                  d="M14.2 12h5.1"
-                                  stroke="currentColor"
-                                  strokeWidth="1.6"
-                                  strokeLinecap="round"
-                                />
-                                <path
-                                  d="M6.8 12h4.8"
-                                  stroke="currentColor"
-                                  strokeWidth="1.6"
-                                  strokeLinecap="round"
-                                />
+                                <path d="M4.5 7.4c0-1 .8-1.8 1.8-1.8h11.4c1 0 1.8.8 1.8 1.8v9.2c0 1-.8 1.8-1.8 1.8H6.3c-1 0-1.8-.8-1.8-1.8V7.4Z" stroke="currentColor" strokeWidth="1.6" />
+                                <path d="M14.2 12h5.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                                <path d="M6.8 12h4.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                               </svg>
                             </span>
-                            <input
-                              className="mfg-input mono"
-                              value={sellerWallet}
-                              onChange={(e) => setSellerWallet(e.target.value)}
-                              placeholder="0x..."
-                              disabled={sellerVerifying}
-                            />
+                            <input className="mfg-input mono" value={sellerWallet} onChange={(e) => setSellerWallet(e.target.value)} placeholder="0x..." disabled={sellerVerifying} />
                           </div>
                           <div className="mfg-hint">This checks seller presence or eligibility based on backend rules.</div>
                         </div>
@@ -1042,12 +976,7 @@ function Manufacturer() {
                               <div className="mfg-qrhead">
                                 <div className="mfg-qrtitle">QR link</div>
                                 <div className="mfg-qrbtns">
-                                  <button
-                                    className="mfg-btn small"
-                                    type="button"
-                                    onClick={() => copyText(registerRes.qr?.qr_url || registerRes.qr?.qr_payload || "")}
-                                    disabled={!normalize(registerRes.qr?.qr_url || registerRes.qr?.qr_payload)}
-                                  >
+                                  <button className="mfg-btn small" type="button" onClick={() => copyText(registerRes.qr?.qr_url || registerRes.qr?.qr_payload || "")} disabled={!normalize(registerRes.qr?.qr_url || registerRes.qr?.qr_payload)}>
                                     Copy link
                                   </button>
                                   <button className="mfg-btn small ghost" type="button" onClick={() => downloadQr(qrPng, registerRes.product?.product_code)} disabled={!qrPng}>
@@ -1202,9 +1131,7 @@ function Manufacturer() {
                                     </button>
                                   </div>
                                 </div>
-                                <div className="mfg-qrimgwrap">
-                                  {selectedQrPng ? <img className="mfg-qrimg" src={selectedQrPng} alt="qr" /> : <div className="mfg-qrph">QR preview</div>}
-                                </div>
+                                <div className="mfg-qrimgwrap">{selectedQrPng ? <img className="mfg-qrimg" src={selectedQrPng} alt="qr" /> : <div className="mfg-qrph">QR preview</div>}</div>
                               </div>
                             </div>
                           </div>
@@ -1236,8 +1163,6 @@ function Manufacturer() {
                                 </div>
                               ) : null}
                             </div>
-
-                            
                           </div>
 
                           <div className="mfg-softbox">
@@ -1246,7 +1171,6 @@ function Manufacturer() {
                               <>
                                 <div className="mfg-kv compact" style={{ marginBottom: 10 }}>
                                   {renderKV("product_code", historyRes.product?.product_code || selected.product_code, true)}
-                                  
                                 </div>
 
                                 <div className="mfg-events">

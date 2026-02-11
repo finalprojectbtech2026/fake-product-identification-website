@@ -12,7 +12,14 @@ function Regulator() {
   const [me, setMe] = useState(null);
   const [meLoading, setMeLoading] = useState(true);
 
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem("auth_token") || "");
+  const [authToken, setAuthToken] = useState(() => {
+    try {
+      return localStorage.getItem("auth_token") || "";
+    } catch {
+      return "";
+    }
+  });
+
   const [authUser, setAuthUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("auth_user") || "null");
@@ -65,6 +72,44 @@ function Regulator() {
     };
   }, []);
 
+  useEffect(() => {
+    const apply = () => {
+      let token = "";
+      let user = null;
+
+      try {
+        token = localStorage.getItem("auth_token") || "";
+      } catch {}
+
+      try {
+        user = JSON.parse(localStorage.getItem("auth_user") || "null");
+      } catch {
+        user = null;
+      }
+
+      setAuthToken(token);
+      setAuthUser(user);
+    };
+
+    apply();
+
+    const onStorage = (e) => {
+      if (!e || !e.key) return;
+      if (e.key === "auth_token" || e.key === "auth_user") apply();
+    };
+
+    window.addEventListener("storage", onStorage);
+
+    const interval = window.setInterval(() => {
+      apply();
+    }, 700);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const apiFetch = useCallback(
     async (path, opts = {}) => {
       const headers = { ...(opts.headers || {}) };
@@ -107,8 +152,6 @@ function Regulator() {
     if (!meLoading && (me || authUser) && !isRegulator) setError("Please login as Regulator to use this portal.");
   }, [isAuthed, meLoading, me, authUser, isRegulator]);
 
-  
-
   const copyText = useCallback(
     async (text) => {
       const t = normalize(text);
@@ -129,14 +172,6 @@ function Regulator() {
     const d = new Date(s);
     if (Number.isNaN(d.getTime())) return s;
     return d.toLocaleString();
-  }, []);
-
-  const shortWallet = useCallback((v) => {
-    const s = normalize(v);
-    if (!s) return "-";
-    if (!s.startsWith("0x")) return s;
-    if (s.length <= 16) return s;
-    return `${s.slice(0, 8)}...${s.slice(-6)}`;
   }, []);
 
   const userStatusText = useCallback((u) => {
@@ -483,7 +518,11 @@ function Regulator() {
       const mono = opts.mono ? "mono" : "";
       const clickable = Boolean(opts.copyValue);
       return (
-        <div className={`r-kv-row ${clickable ? "clickable" : ""}`} key={k} onClick={clickable ? () => copyText(opts.copyValue) : undefined}>
+        <div
+          className={`r-kv-row ${clickable ? "clickable" : ""}`}
+          key={k}
+          onClick={clickable ? () => copyText(opts.copyValue) : undefined}
+        >
           <span className="r-k">{k}</span>
           <span className={`r-v ${mono}`}>{value}</span>
         </div>
@@ -511,10 +550,7 @@ function Regulator() {
               Go to Login
             </button>
           ) : (
-            <>
-              <div className="r-session">{meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}</div>
-             
-            </>
+            <div className="r-session">{meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}</div>
           )}
         </div>
       </header>
@@ -523,10 +559,20 @@ function Regulator() {
         {error ? <div className="r-alert">{error}</div> : null}
 
         <div className="r-tabs">
-          <button className={`r-tab-btn ${activeTab === "users" ? "active" : ""}`} type="button" onClick={() => setActiveTab("users")} disabled={!isRegulator}>
+          <button
+            className={`r-tab-btn ${activeTab === "users" ? "active" : ""}`}
+            type="button"
+            onClick={() => setActiveTab("users")}
+            disabled={!isRegulator}
+          >
             Users approval
           </button>
-          <button className={`r-tab-btn ${activeTab === "products" ? "active" : ""}`} type="button" onClick={() => setActiveTab("products")} disabled={!isRegulator}>
+          <button
+            className={`r-tab-btn ${activeTab === "products" ? "active" : ""}`}
+            type="button"
+            onClick={() => setActiveTab("products")}
+            disabled={!isRegulator}
+          >
             Products approval
           </button>
         </div>
@@ -571,15 +617,26 @@ function Regulator() {
                 </div>
 
                 <div className="r-filters">
-                  <select className="r-select" value={userStatusFilter} onChange={(e) => setUserStatusFilter(e.target.value)} disabled={!isRegulator || usersLoading}>
-                     <option value="ALL">ALL</option>
+                  <select
+                    className="r-select"
+                    value={userStatusFilter}
+                    onChange={(e) => setUserStatusFilter(e.target.value)}
+                    disabled={!isRegulator || usersLoading}
+                  >
+                    <option value="ALL">ALL</option>
                     <option value="PENDING">PENDING</option>
                     <option value="APPROVED">APPROVED</option>
                     <option value="REJECTED">REJECTED</option>
-                   
                   </select>
 
-                  </div>
+                  <input
+                    className="r-input"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search email, wallet, name..."
+                    disabled={!isRegulator || usersLoading}
+                  />
+                </div>
               </div>
 
               <div className="r-table-wrap">
@@ -665,17 +722,34 @@ function Regulator() {
                       <button className="r-btn ghost" type="button" onClick={() => copyText(selectedUser.email)} disabled={!normalize(selectedUser.email)}>
                         Copy Email
                       </button>
-                      <button className="r-btn ghost" type="button" onClick={() => copyText(selectedUser.license_number)} disabled={!normalize(selectedUser.license_number)}>
+                      <button
+                        className="r-btn ghost"
+                        type="button"
+                        onClick={() => copyText(selectedUser.license_number)}
+                        disabled={!normalize(selectedUser.license_number)}
+                      >
                         Copy License
                       </button>
-                      <button className="r-btn ghost" type="button" onClick={() => copyText(selectedUser.wallet_address)} disabled={!normalize(selectedUser.wallet_address)}>
+                      <button
+                        className="r-btn ghost"
+                        type="button"
+                        onClick={() => copyText(selectedUser.wallet_address)}
+                        disabled={!normalize(selectedUser.wallet_address)}
+                      >
                         Copy Wallet
                       </button>
                     </div>
 
                     <div className="r-field" style={{ marginTop: 12 }}>
                       <div className="r-field-label">Notes</div>
-                      <textarea className="r-textarea" value={uDecisionNotes} onChange={(e) => setUDecisionNotes(e.target.value)} placeholder="Approval notes (optional)" disabled={uActionLoading || !isRegulator} rows={4} />
+                      <textarea
+                        className="r-textarea"
+                        value={uDecisionNotes}
+                        onChange={(e) => setUDecisionNotes(e.target.value)}
+                        placeholder="Approval notes (optional)"
+                        disabled={uActionLoading || !isRegulator}
+                        rows={4}
+                      />
                       <div className="r-hint">Saved to approval_notes</div>
                     </div>
 
@@ -736,10 +810,20 @@ function Regulator() {
                               <button className="r-btn small" type="button" onClick={() => setSelectedCode(p.product_code)}>
                                 View
                               </button>
-                              <button className="r-btn small ghost" type="button" onClick={() => auditDecision(p.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                              <button
+                                className="r-btn small ghost"
+                                type="button"
+                                onClick={() => auditDecision(p.product_code, "ACCEPT")}
+                                disabled={actionLoading || !isRegulator}
+                              >
                                 Accept
                               </button>
-                              <button className="r-btn small danger" type="button" onClick={() => auditDecision(p.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                              <button
+                                className="r-btn small danger"
+                                type="button"
+                                onClick={() => auditDecision(p.product_code, "REJECT")}
+                                disabled={actionLoading || !isRegulator}
+                              >
                                 Reject
                               </button>
                             </div>
@@ -790,14 +874,21 @@ function Regulator() {
                       <button className="r-btn" type="button" onClick={runScanForSelected} disabled={scanLoading}>
                         {scanLoading ? "Verifying..." : "Verify Authenticity"}
                       </button>
-                      <button className="r-btn ghost" type="button" onClick={() => loadHistory(selectedProduct.product_code)} disabled={historyLoading}>
+                      <button
+                        className="r-btn ghost"
+                        type="button"
+                        onClick={() => loadHistory(selectedProduct.product_code)}
+                        disabled={historyLoading}
+                      >
                         {historyLoading ? "Loading..." : "Refresh History"}
                       </button>
                     </div>
 
                     {scanRes?.verdict ? (
                       <div className="r-verdict">
-                        <div className={`r-verdict-pill ${scanRes.verdict.isAuthentic ? "ok" : "bad"}`}>{scanRes.verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}</div>
+                        <div className={`r-verdict-pill ${scanRes.verdict.isAuthentic ? "ok" : "bad"}`}>
+                          {scanRes.verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}
+                        </div>
                         <div className="r-verdict-msg">{normalize(scanRes.verdict.message) || "-"}</div>
                         <div className="r-kv tight">
                           {renderKeyValue("isLatestDbState", String(Boolean(scanRes.verdict.isLatestDbState)))}
@@ -813,14 +904,31 @@ function Regulator() {
 
                     <div className="r-field">
                       <div className="r-field-label">Reason</div>
-                      <textarea className="r-textarea" value={auditReason} onChange={(e) => setAuditReason(e.target.value)} placeholder="Write why you accept or reject (optional)" disabled={actionLoading || !isRegulator} rows={4} />
+                      <textarea
+                        className="r-textarea"
+                        value={auditReason}
+                        onChange={(e) => setAuditReason(e.target.value)}
+                        placeholder="Write why you accept or reject (optional)"
+                        disabled={actionLoading || !isRegulator}
+                        rows={4}
+                      />
                     </div>
 
                     <div className="r-actions">
-                      <button className="r-btn ghost" type="button" onClick={() => auditDecision(selectedProduct.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
+                      <button
+                        className="r-btn ghost"
+                        type="button"
+                        onClick={() => auditDecision(selectedProduct.product_code, "ACCEPT")}
+                        disabled={actionLoading || !isRegulator}
+                      >
                         Accept
                       </button>
-                      <button className="r-btn danger" type="button" onClick={() => auditDecision(selectedProduct.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
+                      <button
+                        className="r-btn danger"
+                        type="button"
+                        onClick={() => auditDecision(selectedProduct.product_code, "REJECT")}
+                        disabled={actionLoading || !isRegulator}
+                      >
                         Reject
                       </button>
                     </div>

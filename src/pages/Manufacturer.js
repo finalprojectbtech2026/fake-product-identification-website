@@ -36,6 +36,10 @@ function Manufacturer() {
   const [sellerVerifying, setSellerVerifying] = useState(false);
   const [sellerVerifyRes, setSellerVerifyRes] = useState(null);
 
+  const [walletAddress, setWalletAddress] = useState("");
+  const [walletLinking, setWalletLinking] = useState(false);
+  const [walletLinked, setWalletLinked] = useState(null);
+
   const [productCode, setProductCode] = useState("");
   const [name, setName] = useState("");
   const [batch, setBatch] = useState("");
@@ -60,6 +64,15 @@ function Manufacturer() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [selectedCode, setSelectedCode] = useState("");
+
+  const [tProductCode, setTProductCode] = useState("");
+  const [tToWallet, setTToWallet] = useState("");
+  const [tNotes, setTNotes] = useState("Transferred/Updated");
+  const [tExtraJson, setTExtraJson] = useState('{"stage":"manufacturer_update"}');
+  const [transferring, setTransferring] = useState(false);
+  const [transferRes, setTransferRes] = useState(null);
+  const [transferQrUrl, setTransferQrUrl] = useState("");
+  const [transferQrPng, setTransferQrPng] = useState("");
 
   const toastTimerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -101,6 +114,7 @@ function Manufacturer() {
         setAuthToken("");
         setAuthUser(null);
         setMe(null);
+        navigate("/auth");
         throw new Error("Session expired. Please login again.");
       }
 
@@ -114,7 +128,7 @@ function Manufacturer() {
 
       return data;
     },
-    [authToken]
+    [authToken, navigate]
   );
 
   const refreshMe = useCallback(async () => {
@@ -266,6 +280,11 @@ function Manufacturer() {
     return "neutral";
   }, []);
 
+  const walletStatus = useMemo(() => {
+    const w = normalize(me?.wallet_address) || normalize(walletLinked?.wallet_address);
+    return w ? w : "";
+  }, [me, walletLinked]);
+
   const guardManufacturer = useCallback(() => {
     if (!isAuthed) {
       navigate("/auth");
@@ -275,8 +294,24 @@ function Manufacturer() {
       setError("Please login as Manufacturer to use this portal.");
       return false;
     }
+    if (!canUsePortal) {
+      if (isRejected) setError("Your registry request was rejected.");
+      else setError("Waiting for regulator approval.");
+      return false;
+    }
     return true;
-  }, [isAuthed, isManufacturer, navigate]);
+  }, [isAuthed, isManufacturer, canUsePortal, isRejected, navigate]);
+
+  const parseExtra = useCallback(() => {
+    const raw = normalize(tExtraJson);
+    if (!raw) return {};
+    try {
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === "object" ? obj : {};
+    } catch {
+      return null;
+    }
+  }, [tExtraJson]);
 
   const resetAll = useCallback(() => {
     setProductCode("");
@@ -291,13 +326,18 @@ function Manufacturer() {
     setQrPng("");
     setScanRes(null);
     setHistoryRes(null);
+    setTransferRes(null);
+    setTransferQrUrl("");
+    setTransferQrPng("");
+    setTToWallet("");
+    setTNotes("Transferred/Updated");
+    setTExtraJson('{"stage":"manufacturer_update"}');
     setError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
   const uploadCertificateToIpfs = useCallback(async () => {
     if (!guardManufacturer()) return;
-    if (!canUsePortal) return setError(isRejected ? "Your registry request was rejected." : "Waiting for regulator approval.");
     if (!certFile) return setError("Choose a file first.");
 
     setError("");
@@ -320,6 +360,7 @@ function Manufacturer() {
         setAuthToken("");
         setAuthUser(null);
         setMe(null);
+        navigate("/auth");
         throw new Error("Session expired. Please login again.");
       }
 
@@ -337,11 +378,10 @@ function Manufacturer() {
     } finally {
       setCertUploading(false);
     }
-  }, [guardManufacturer, canUsePortal, isRejected, certFile, authToken, showToast]);
+  }, [guardManufacturer, certFile, authToken, showToast, navigate]);
 
   const verifySellerWallet = useCallback(async () => {
     if (!guardManufacturer()) return;
-    if (!canUsePortal) return setError(isRejected ? "Your registry request was rejected." : "Waiting for regulator approval.");
     const w = normalize(sellerWallet);
     if (!w) return setError("Enter seller wallet address to verify.");
 
@@ -364,7 +404,36 @@ function Manufacturer() {
     } finally {
       setSellerVerifying(false);
     }
-  }, [guardManufacturer, canUsePortal, isRejected, sellerWallet, apiFetch, safeJson, refreshMe, showToast]);
+  }, [guardManufacturer, sellerWallet, apiFetch, safeJson, refreshMe, showToast]);
+
+  const linkWallet = useCallback(async () => {
+    if (!guardManufacturer()) return;
+    const w = normalize(walletAddress);
+    if (!w) {
+      setError("Enter wallet address.");
+      return;
+    }
+
+    setError("");
+    setWalletLinking(true);
+    setWalletLinked(null);
+
+    try {
+      const data = await apiFetch("/api/sellers/manufacturer/link-wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: safeJson({ wallet_address: w }),
+        noCache: true
+      });
+      setWalletLinked(data);
+      showToast("Wallet linked");
+      await refreshMe();
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setWalletLinking(false);
+    }
+  }, [guardManufacturer, walletAddress, apiFetch, safeJson, showToast, refreshMe]);
 
   const canUpload = useMemo(() => Boolean(certFile) && !certUploading, [certFile, certUploading]);
 
@@ -406,9 +475,14 @@ function Manufacturer() {
     loadProducts();
   }, [isAuthed, isManufacturer, loadProducts]);
 
+  useEffect(() => {
+    const c = normalize(selectedCode);
+    if (!c) return;
+    setTProductCode(c);
+  }, [selectedCode]);
+
   const registerProduct = useCallback(async () => {
     if (!guardManufacturer()) return;
-    if (!canUsePortal) return setError(isRejected ? "Your registry request was rejected." : "Waiting for regulator approval.");
 
     setError("");
     setRegistering(true);
@@ -461,6 +535,7 @@ function Manufacturer() {
       setRegisterRes(next);
       showToast("Product registered");
       setSelectedCode(pc);
+      setTProductCode(pc);
       setActiveTab("products");
       await loadProducts();
     } catch (e) {
@@ -468,23 +543,7 @@ function Manufacturer() {
     } finally {
       setRegistering(false);
     }
-  }, [
-    guardManufacturer,
-    canUsePortal,
-    isRejected,
-    productCode,
-    name,
-    batch,
-    brand,
-    notes,
-    certUploadRes,
-    nfcUid,
-    apiFetch,
-    safeJson,
-    buildQrUrl,
-    showToast,
-    loadProducts
-  ]);
+  }, [guardManufacturer, productCode, name, batch, brand, notes, certUploadRes, nfcUid, apiFetch, safeJson, buildQrUrl, showToast, loadProducts]);
 
   const downloadQr = useCallback((png, code) => {
     if (!png) return;
@@ -625,6 +684,94 @@ function Manufacturer() {
     };
     make();
   }, [registerRes, buildQrUrl]);
+
+  useEffect(() => {
+    const make = async () => {
+      const payload = transferRes?.qr_payload || "";
+      if (!payload) {
+        setTransferQrUrl("");
+        setTransferQrPng("");
+        return;
+      }
+      try {
+        const parsed = JSON.parse(payload);
+        const pid = normalize(parsed?.productId);
+        const sh = normalize(parsed?.stateHash);
+        if (!pid || !sh) {
+          setTransferQrUrl("");
+          setTransferQrPng("");
+          return;
+        }
+        const url = buildQrUrl(pid, sh);
+        setTransferQrUrl(url);
+        const png = await QRCode.toDataURL(url, { errorCorrectionLevel: "M", margin: 2, scale: 7 });
+        setTransferQrPng(png);
+      } catch {
+        setTransferQrUrl("");
+        setTransferQrPng("");
+      }
+    };
+    make();
+  }, [transferRes, buildQrUrl]);
+
+  const transferProduct = useCallback(async () => {
+    if (!guardManufacturer()) return;
+
+    const pc = normalize(tProductCode);
+    if (!pc) {
+      setError("Enter product code.");
+      return;
+    }
+
+    const to = normalize(tToWallet);
+    if (!to) {
+      setError("Enter valid to_wallet address.");
+      return;
+    }
+
+    const extraObj = parseExtra();
+    if (extraObj === null) {
+      setError("Extra JSON is invalid.");
+      return;
+    }
+
+    setError("");
+    setTransferring(true);
+    setTransferRes(null);
+
+    try {
+      const body = {
+        to_wallet: to,
+        notes: normalize(tNotes) || "Transferred/Updated",
+        extra: extraObj
+      };
+
+      const data = await apiFetch(`/api/products/${encodeURIComponent(pc)}/transfer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: safeJson(body),
+        noCache: true
+      });
+
+      setTransferRes(data);
+      showToast("Transfer completed");
+      await loadProducts();
+      setActiveTab("products");
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setTransferring(false);
+    }
+  }, [guardManufacturer, tProductCode, tToWallet, tNotes, parseExtra, apiFetch, safeJson, showToast, loadProducts]);
+
+  const clearTransfer = useCallback(() => {
+    setTransferRes(null);
+    setTransferQrUrl("");
+    setTransferQrPng("");
+    setTToWallet("");
+    setTNotes("Transferred/Updated");
+    setTExtraJson('{"stage":"manufacturer_update"}');
+  }, []);
 
   const verdict = scanRes?.verdict || null;
 
@@ -774,9 +921,7 @@ function Manufacturer() {
               <div className="mfg-card-head">
                 <div>
                   <div className="mfg-card-title">Registry approval</div>
-                  <div className="mfg-card-sub">
-                    {isRejected ? "Your registry request was rejected. Contact the regulator or re-register." : "Your registry request is pending regulator approval. You can view your profile details below."}
-                  </div>
+                  <div className="mfg-card-sub">{isRejected ? "Your registry request was rejected. Contact the regulator or re-register." : "Your registry request is pending regulator approval. You can view your profile details below."}</div>
                 </div>
                 <span className={`mfg-pill ${pillClass(approvalText)}`}>
                   <span className="mfg-dot" />
@@ -857,6 +1002,56 @@ function Manufacturer() {
                     <div className="mfg-card">
                       <div className="mfg-card-head">
                         <div>
+                          <div className="mfg-card-title">Link wallet</div>
+                          
+                        </div>
+                      </div>
+
+                      <div className="mfg-card-body">
+                        <div className="mfg-field">
+                          <div className="mfg-label">Wallet address</div>
+                          <div className="mfg-input-wrap">
+                            <input className="mfg-input mono" value={walletAddress} onChange={(e) => setWalletAddress(e.target.value)} placeholder="0x..." disabled={walletLinking || transferring} />
+                          </div>
+                        </div>
+
+                        <div className="mfg-actions">
+                          <button className="mfg-btn" type="button" onClick={linkWallet} disabled={walletLinking}>
+                            {walletLinking ? "Linking..." : "Link wallet"}
+                          </button>
+                          <button
+                            className="mfg-btn ghost"
+                            type="button"
+                            onClick={() => {
+                              setWalletAddress("");
+                              setWalletLinked(null);
+                            }}
+                            disabled={walletLinking}
+                          >
+                            Clear
+                          </button>
+                          <button className="mfg-btn ghost" type="button" onClick={() => copyText(walletStatus)} disabled={!normalize(walletStatus)}>
+                            Copy linked wallet
+                          </button>
+                        </div>
+
+                        <div className="mfg-softbox" style={{ marginTop: 12 }}>
+                          <div className="mfg-softbox-title">Current linked wallet</div>
+                          <div className="mfg-kv compact">{renderKV("wallet_address", walletStatus || "null", true)}</div>
+                        </div>
+
+                        {walletLinked?.wallet_address ? (
+                          <div className="mfg-softbox" style={{ marginTop: 12 }}>
+                            <div className="mfg-softbox-title">Link result</div>
+                            <div className="mfg-kv compact">{renderKV("wallet_address", walletLinked.wallet_address || "null", true)}</div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mfg-card">
+                      <div className="mfg-card-head">
+                        <div>
                           <div className="mfg-card-title">Seller verification</div>
                           <div className="mfg-card-sub">Verify seller wallet before any transfer or sale is allowed.</div>
                         </div>
@@ -875,7 +1070,6 @@ function Manufacturer() {
                             </span>
                             <input className="mfg-input mono" value={sellerWallet} onChange={(e) => setSellerWallet(e.target.value)} placeholder="0x..." disabled={sellerVerifying} />
                           </div>
-                          <div className="mfg-hint">This checks seller presence or eligibility based on backend rules.</div>
                         </div>
 
                         <div className="mfg-actions">
@@ -902,6 +1096,128 @@ function Manufacturer() {
                               {renderKV("wallet_address", sellerVerifyRes.wallet_address || "-", true)}
                               {renderKV("chain_tx_hash", sellerVerifyRes.chain_tx_hash || "null", true)}
                             </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mfg-card">
+                      <div className="mfg-card-head">
+                        <div>
+                          <div className="mfg-card-title">Transfer / update</div>
+                          <div className="mfg-card-sub">Updates product state and generates a QR scan link.</div>
+                        </div>
+                      </div>
+
+                      <div className="mfg-card-body">
+                        <div className="mfg-formgrid">
+                          <div className="mfg-field">
+                            <div className="mfg-label">Product code</div>
+                            <input className="mfg-input" value={tProductCode} onChange={(e) => setTProductCode(e.target.value)} placeholder="P2001" disabled={transferring} />
+                          </div>
+
+                          <div className="mfg-field">
+                            <div className="mfg-label">to_wallet</div>
+                            <input className="mfg-input mono" value={tToWallet} onChange={(e) => setTToWallet(e.target.value)} placeholder="0x..." disabled={transferring} />
+                          </div>
+
+                          <div className="mfg-field">
+                            <div className="mfg-label">Notes</div>
+                            <input className="mfg-input" value={tNotes} onChange={(e) => setTNotes(e.target.value)} placeholder="Transferred/Updated" disabled={transferring} />
+                          </div>
+
+                          <div className="mfg-field">
+                            <div className="mfg-label">Extra JSON</div>
+                            <input className="mfg-input mono" value={tExtraJson} onChange={(e) => setTExtraJson(e.target.value)} placeholder='{"stage":"manufacturer_update"}' disabled={transferring} />
+                          </div>
+                        </div>
+
+                        <div className="mfg-actions">
+                          <button className="mfg-btn" type="button" onClick={transferProduct} disabled={transferring}>
+                            {transferring ? "Updating..." : "Transfer / Update"}
+                          </button>
+                          <button className="mfg-btn ghost" type="button" onClick={clearTransfer} disabled={transferring}>
+                            Clear
+                          </button>
+                          <button className="mfg-btn ghost" type="button" onClick={() => copyText(walletStatus)} disabled={!normalize(walletStatus)}>
+                            Copy my wallet
+                          </button>
+                        </div>
+
+                        {transferRes ? (
+                          <div className="mfg-result" style={{ marginTop: 14 }}>
+                            <div className="mfg-result-head">
+                              <div>
+                                <div className="mfg-result-title">Transfer result</div>
+                                <div className="mfg-result-sub">State change evidence and QR link.</div>
+                              </div>
+                              <span className="mfg-pill neutral">
+                                <span className="mfg-dot" />
+                                UPDATED
+                              </span>
+                            </div>
+
+                            <div className="mfg-softbox" style={{ marginTop: 10 }}>
+                              <div className="mfg-softbox-title">Evidence</div>
+                              <div className="mfg-kv compact">
+                                {renderKV("prev_state_hash", transferRes?.prev_state_hash || "null", true)}
+                                {renderKV("new_state_hash", transferRes?.new_state_hash || "null", true)}
+                                {renderKV("chain_transfer_tx_hash", transferRes?.chain_transfer_tx_hash || "null", true)}
+                              </div>
+                              <div className="mfg-actions" style={{ marginTop: 10 }}>
+                                <button className="mfg-btn ghost" type="button" onClick={() => copyText(transferRes?.new_state_hash || "")} disabled={!normalize(transferRes?.new_state_hash || "")}>
+                                  Copy new hash
+                                </button>
+                                <button className="mfg-btn ghost" type="button" onClick={() => copyText(transferRes?.chain_transfer_tx_hash || "")} disabled={!normalize(transferRes?.chain_transfer_tx_hash || "")}>
+                                  Copy tx
+                                </button>
+                              </div>
+                            </div>
+
+                            {transferQrUrl ? (
+                              <div className="mfg-qrbox" style={{ marginTop: 12 }}>
+                                <div className="mfg-qrhead">
+                                  <div className="mfg-qrtitle">QR link</div>
+                                  <div className="mfg-qrbtns">
+                                    <button className="mfg-btn small" type="button" onClick={() => copyText(transferQrUrl)} disabled={!normalize(transferQrUrl)}>
+                                      Copy link
+                                    </button>
+                                    <button className="mfg-btn small ghost" type="button" onClick={() => downloadQr(transferQrPng, tProductCode)} disabled={!transferQrPng}>
+                                      Download
+                                    </button>
+                                    <button className="mfg-btn small ghost" type="button" onClick={() => openLink(transferQrUrl)} disabled={!normalize(transferQrUrl)}>
+                                      Open
+                                    </button>
+                                    <button
+                                      className="mfg-btn small ghost"
+                                      type="button"
+                                      onClick={() => {
+                                        try {
+                                          const parsed = JSON.parse(transferRes?.qr_payload || "{}");
+                                          const pid = parsed?.productId || "";
+                                          const sh = parsed?.stateHash || "";
+                                          runScan(pid, sh);
+                                          setActiveTab("products");
+                                        } catch {
+                                          setError("QR payload parse failed.");
+                                        }
+                                      }}
+                                      disabled={scanLoading || !normalize(transferRes?.qr_payload || "")}
+                                    >
+                                      {scanLoading ? "Verifying..." : "Verify"}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="mfg-qrgrid">
+                                  <div className="mfg-qrtext">
+                                    <div className="mfg-payload">{transferQrUrl}</div>
+                                    <div className="mfg-payload muted">{transferRes?.qr_payload || ""}</div>
+                                  </div>
+                                  <div className="mfg-qrimgwrap">{transferQrPng ? <img className="mfg-qrimg" src={transferQrPng} alt="qr" /> : <div className="mfg-qrph">QR preview</div>}</div>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
@@ -1086,7 +1402,14 @@ function Manufacturer() {
                             const statusText = st ? st : "PENDING";
                             const statusClass = st === "ACCEPT" ? "ok" : st === "REJECT" ? "bad" : "warn";
                             return (
-                              <tr key={p.product_code} className={active ? "active" : ""} onClick={() => setSelectedCode(p.product_code)}>
+                              <tr
+                                key={p.product_code}
+                                className={active ? "active" : ""}
+                                onClick={() => {
+                                  setSelectedCode(p.product_code);
+                                  setTProductCode(p.product_code);
+                                }}
+                              >
                                 <td className="mono">{p.product_code}</td>
                                 <td>{p.name || "-"}</td>
                                 <td>{p.batch || "-"}</td>

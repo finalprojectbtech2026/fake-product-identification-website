@@ -1,11 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import QRCode from "qrcode";
 import Navbar from "./Navbar";
 import "./Seller.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
-const WEB_BASE = typeof window !== "undefined" ? window.location.origin : "";
 
 const normalize = (v) => String(v || "").trim();
 
@@ -19,21 +17,10 @@ function Seller() {
   const [walletLinking, setWalletLinking] = useState(false);
   const [walletLinked, setWalletLinked] = useState(null);
 
-  const [productCode, setProductCode] = useState("");
-  const [toWallet, setToWallet] = useState("");
-  const [notes, setNotes] = useState("Transferred/Updated");
-  const [extraJson, setExtraJson] = useState('{"stage":"seller_update"}');
-
-  const [transferring, setTransferring] = useState(false);
-  const [transferRes, setTransferRes] = useState(null);
-
   const [scanProductId, setScanProductId] = useState("");
   const [scanStateHash, setScanStateHash] = useState("");
   const [scanning, setScanning] = useState(false);
   const [scanRes, setScanRes] = useState(null);
-
-  const [qrPng, setQrPng] = useState("");
-  const [qrValue, setQrValue] = useState("");
 
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
@@ -57,11 +44,19 @@ function Seller() {
   });
 
   const isAuthed = Boolean(authToken);
+
   const roleText = useMemo(() => normalize(me?.role || authUser?.role).toLowerCase(), [me, authUser]);
   const isSeller = roleText === "seller";
 
   const approvalRaw = useMemo(
-    () => normalize(me?.approval_status || me?.status || me?.verification_status || authUser?.approval_status || authUser?.status).toLowerCase(),
+    () =>
+      normalize(
+        me?.approval_status ||
+          me?.status ||
+          me?.verification_status ||
+          authUser?.approval_status ||
+          authUser?.status
+      ).toLowerCase(),
     [me, authUser]
   );
 
@@ -197,17 +192,6 @@ function Seller() {
     return true;
   }, [isAuthed, isSeller, canUsePortal, approvalStatus, goLogin]);
 
-  const parseExtra = useCallback(() => {
-    const raw = normalize(extraJson);
-    if (!raw) return {};
-    try {
-      const obj = JSON.parse(raw);
-      return obj && typeof obj === "object" ? obj : {};
-    } catch {
-      return null;
-    }
-  }, [extraJson]);
-
   const walletStatus = useMemo(() => {
     const w = normalize(me?.wallet_address) || normalize(walletLinked?.wallet_address);
     return w ? w : "";
@@ -278,42 +262,13 @@ function Seller() {
     }
   }, [apiFetch, guardSeller, refreshMe, safeJson, showToast, walletAddress]);
 
-  const buildScanLink = useCallback((pid, sh) => {
-    const p = encodeURIComponent(normalize(pid));
-    const s = encodeURIComponent(normalize(sh));
-    return `${WEB_BASE}/scan?productId=${p}&stateHash=${s}`;
-  }, []);
-
-  useEffect(() => {
-    const make = async () => {
-      if (!transferRes?.qr_payload) {
-        setQrPng("");
-        setQrValue("");
-        return;
-      }
-      try {
-        const parsed = JSON.parse(transferRes.qr_payload);
-        const pid = normalize(parsed?.productId);
-        const sh = normalize(parsed?.stateHash);
-        if (!pid || !sh) {
-          setQrPng("");
-          setQrValue("");
-          return;
-        }
-        const link = buildScanLink(pid, sh);
-        setQrValue(link);
-        const png = await QRCode.toDataURL(link, { errorCorrectionLevel: "M", margin: 2, scale: 8 });
-        setQrPng(png);
-      } catch {
-        setQrPng("");
-        setQrValue("");
-      }
-    };
-    make();
-  }, [transferRes, buildScanLink]);
-
   const loadProducts = useCallback(async () => {
     if (!isAuthed || !isSeller || !canUsePortal) return;
+    if (!normalize(walletStatus)) {
+      setProducts([]);
+      setProductsErr("Link your wallet to view your transferred products.");
+      return;
+    }
     setProductsLoading(true);
     setProductsErr("");
     try {
@@ -331,7 +286,7 @@ function Seller() {
     } finally {
       setProductsLoading(false);
     }
-  }, [apiFetch, canUsePortal, isAuthed, isSeller]);
+  }, [apiFetch, canUsePortal, isAuthed, isSeller, walletStatus]);
 
   useEffect(() => {
     loadProducts();
@@ -342,7 +297,6 @@ function Seller() {
       const code = normalize(row?.product_code || row?.productId || row?.product_id || row?.code || row?.id);
       if (!code) return;
       setSelectedProduct(row);
-      setProductCode(code);
       setHistory([]);
       setHistoryErr("");
       setHistoryLoading(true);
@@ -359,74 +313,6 @@ function Seller() {
     },
     [apiFetch]
   );
-
-  const transferProduct = useCallback(async () => {
-    if (!guardSeller()) return;
-
-    if (!normalize(walletStatus)) {
-      setError("Link your wallet first.");
-      return;
-    }
-
-    const pc = normalize(productCode);
-    if (!pc) {
-      setError("Enter product code.");
-      return;
-    }
-
-    const to = normalize(toWallet);
-    if (!to) {
-      setError("Enter valid to_wallet address.");
-      return;
-    }
-
-    const extraObj = parseExtra();
-    if (extraObj === null) {
-      setError("Extra JSON is invalid.");
-      return;
-    }
-
-    setError("");
-    setTransferring(true);
-    setTransferRes(null);
-    setScanRes(null);
-
-    try {
-      const body = {
-        to_wallet: to,
-        notes: normalize(notes) || "Transferred/Updated",
-        extra: extraObj
-      };
-
-      const data = await apiFetch(`/api/products/${encodeURIComponent(pc)}/transfer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: safeJson(body)
-      });
-
-      setTransferRes(data);
-
-      try {
-        const parsed = JSON.parse(data?.qr_payload || "{}");
-        const pid = normalize(parsed?.productId);
-        const sh = normalize(parsed?.stateHash);
-        if (pid && sh) {
-          setScanProductId(pid);
-          setScanStateHash(sh);
-        }
-      } catch {
-        setScanProductId((x) => x);
-        setScanStateHash((x) => x);
-      }
-
-      showToast("Transfer completed");
-      loadProducts();
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setTransferring(false);
-    }
-  }, [apiFetch, guardSeller, loadProducts, notes, parseExtra, productCode, safeJson, showToast, toWallet, walletStatus]);
 
   const scanVerify = useCallback(async () => {
     const pid = normalize(scanProductId);
@@ -454,37 +340,10 @@ function Seller() {
     }
   }, [apiFetch, safeJson, scanProductId, scanStateHash, showToast]);
 
-  const downloadQr = useCallback(() => {
-    if (!qrPng) return;
-    const a = document.createElement("a");
-    a.href = qrPng;
-    a.download = `${normalize(productCode) || "product"}-qr.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }, [productCode, qrPng]);
-
-  const clearTransfer = useCallback(() => {
-    setTransferRes(null);
-    setQrPng("");
-    setQrValue("");
-  }, []);
-
   const clearScan = useCallback(() => {
     setScanRes(null);
     setError("");
   }, []);
-
-  const fillScanInputsFromPayload = useCallback(() => {
-    try {
-      const parsed = JSON.parse(transferRes?.qr_payload || "{}");
-      setScanProductId(normalize(parsed?.productId));
-      setScanStateHash(normalize(parsed?.stateHash));
-      showToast("Scan inputs filled");
-    } catch {
-      setError("QR payload parse failed.");
-    }
-  }, [showToast, transferRes]);
 
   const verdict = scanRes?.verdict || null;
 
@@ -502,15 +361,6 @@ function Seller() {
       latest_state_hash: s?.latest_state_hash || v?.latest_state_hash || ""
     };
   }, [scanRes]);
-
-  const transferEvidence = useMemo(() => {
-    const t = transferRes || {};
-    return {
-      prev_state_hash: t?.prev_state_hash || "",
-      new_state_hash: t?.new_state_hash || "",
-      chain_transfer_tx_hash: t?.chain_transfer_tx_hash || ""
-    };
-  }, [transferRes]);
 
   const portalGate = useMemo(() => {
     if (!isAuthed) return { ok: false, title: "Login required", msg: "Please login to use Seller portal.", action: "Go to Login" };
@@ -536,8 +386,8 @@ function Seller() {
 
   const rowStatus = useCallback((p) => {
     const raw = normalize(p?.audit_status || p?.status || p?.stage || p?.state || "");
-    const t = raw ? raw.toUpperCase() : "PENDING";
-    if (["ACCEPT", "APPROVED", "ACTIVE", "VERIFIED"].includes(t)) return { text: "ACTIVE", cls: "sx-chip sx-chip-ok" };
+    const t = raw ? raw.toUpperCase() : "OWNED";
+    if (["ACCEPT", "APPROVED", "ACTIVE", "VERIFIED", "OWNED"].includes(t)) return { text: "OWNED", cls: "sx-chip sx-chip-ok" };
     if (["REJECT", "REJECTED", "BLOCKED", "DISABLED"].includes(t)) return { text: "BLOCKED", cls: "sx-chip sx-chip-bad" };
     if (["PENDING", "REVIEW", "REQUESTED"].includes(t)) return { text: "PENDING", cls: "sx-chip sx-chip-warn" };
     return { text: t, cls: "sx-chip" };
@@ -553,7 +403,7 @@ function Seller() {
             <div className="sx-brand-mark">S</div>
             <div className="sx-brand-text">
               <div className="sx-brand-title">Seller Portal</div>
-              <div className="sx-brand-sub">Wallet, transfers, QR, verification</div>
+              <div className="sx-brand-sub">Wallet, transferred products, history, verification</div>
             </div>
           </div>
         </div>
@@ -641,7 +491,6 @@ function Seller() {
                     <span className="sx-v sx-mono">
                       <span className="sx-inline">
                         <span>{normalize(identity.licenseNumber) || "-"}</span>
-                       
                       </span>
                     </span>
                   </div>
@@ -651,7 +500,6 @@ function Seller() {
                     <span className="sx-v">
                       <span className="sx-inline">
                         <span>{normalize(identity.email) || "-"}</span>
-                        
                       </span>
                     </span>
                   </div>
@@ -684,14 +532,20 @@ function Seller() {
                 <div className="sx-card-head" style={{ paddingTop: 0 }}>
                   <div>
                     <div className="sx-card-title">Link wallet</div>
-                    <div className="sx-card-sub">Required to transfer products</div>
+                    <div className="sx-card-sub">Required to fetch your transferred products</div>
                   </div>
                 </div>
 
                 <div className="sx-form">
                   <div className="sx-field">
                     <label className="sx-label">Wallet address</label>
-                    <input className="sx-input sx-mono" value={walletAddress} onChange={(e) => setWalletAddress(e.target.value)} placeholder="0x..." disabled={walletLinking || transferring || !canUsePortal} />
+                    <input
+                      className="sx-input sx-mono"
+                      value={walletAddress}
+                      onChange={(e) => setWalletAddress(e.target.value)}
+                      placeholder="0x..."
+                      disabled={walletLinking || !canUsePortal}
+                    />
                   </div>
 
                   <div className="sx-actions">
@@ -731,8 +585,8 @@ function Seller() {
                 <div className="sx-card">
                   <div className="sx-card-head">
                     <div>
-                      <div className="sx-card-title">My products</div>
-                      <div className="sx-card-sub">Select a product to auto-fill transfer and load history</div>
+                      <div className="sx-card-title">My transferred products</div>
+                      <div className="sx-card-sub">These are products currently owned by your linked wallet (on-chain)</div>
                     </div>
                     <button className="sx-btn sx-btn-ghost" type="button" onClick={loadProducts} disabled={!canUsePortal || productsLoading}>
                       {productsLoading ? "Refreshing..." : "Refresh"}
@@ -766,7 +620,14 @@ function Seller() {
                           const ow = normalize(p?.owner_wallet || p?.ownerWallet || p?.current_owner_wallet || p?.wallet_address || "-") || "-";
                           const hs = normalize(p?.latest_state_hash || p?.state_hash || p?.stateHash || "-") || "-";
                           const status = rowStatus(p);
-                          const active = normalize(selectedProduct?.product_code || selectedProduct?.productId || selectedProduct?.product_id || selectedProduct?.code || selectedProduct?.id) === code;
+                          const active =
+                            normalize(
+                              selectedProduct?.product_code ||
+                                selectedProduct?.productId ||
+                                selectedProduct?.product_id ||
+                                selectedProduct?.code ||
+                                selectedProduct?.id
+                            ) === code;
 
                           return (
                             <tr key={`${code}-${idx}`} className={active ? "sx-row-active" : ""} onClick={() => selectProductFromRow(p)}>
@@ -797,11 +658,8 @@ function Seller() {
                       <div className="sx-subhead">
                         <div>
                           <div className="sx-subtitle">Selected product</div>
-                          <div className="sx-submeta">{normalize(productCode) || "-"}</div>
+                          <div className="sx-submeta">{normalize(selectedProduct?.product_code || selectedProduct?.productId || selectedProduct?.product_id || selectedProduct?.code || selectedProduct?.id) || "-"}</div>
                         </div>
-                        <button className="sx-mini" type="button" onClick={() => copyText(productCode)} disabled={!normalize(productCode)}>
-                          Copy code
-                        </button>
                       </div>
 
                       <div className="sx-kv sx-kv-tight">
@@ -879,126 +737,8 @@ function Seller() {
                       </div>
                     </div>
                   ) : (
-                    <div className="sx-emptybox">Select a product to see history and auto-fill the transfer form.</div>
+                    <div className="sx-emptybox">Select a product to see history.</div>
                   )}
-                </div>
-
-                <div className="sx-card">
-                  <div className="sx-card-head">
-                    <div>
-                      <div className="sx-card-title">Transfer / update</div>
-                      <div className="sx-card-sub">Updates product state and generates a QR scan link</div>
-                    </div>
-                  </div>
-
-                  <div className="sx-form sx-form-2">
-                    <div className="sx-field">
-                      <label className="sx-label">Product code</label>
-                      <input className="sx-input sx-mono" value={productCode} onChange={(e) => setProductCode(e.target.value)} placeholder="P1001" disabled={transferring || !canUsePortal} />
-                    </div>
-
-                    <div className="sx-field">
-                      <label className="sx-label">to_wallet</label>
-                      <input className="sx-input sx-mono" value={toWallet} onChange={(e) => setToWallet(e.target.value)} placeholder="0x..." disabled={transferring || !canUsePortal} />
-                    </div>
-
-                    <div className="sx-field">
-                      <label className="sx-label">Notes</label>
-                      <input className="sx-input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Transferred/Updated" disabled={transferring || !canUsePortal} />
-                    </div>
-
-                    <div className="sx-field">
-                      <label className="sx-label">Extra JSON</label>
-                      <input className="sx-input sx-mono" value={extraJson} onChange={(e) => setExtraJson(e.target.value)} placeholder='{"stage":"seller_update"}' disabled={transferring || !canUsePortal} />
-                    </div>
-                  </div>
-
-                  <div className="sx-actions">
-                    <button className="sx-btn sx-btn-primary" type="button" onClick={transferProduct} disabled={transferring || !canUsePortal || !normalize(walletStatus)}>
-                      {transferring ? "Updating..." : "Transfer / Update"}
-                    </button>
-                    <button className="sx-btn sx-btn-ghost" type="button" onClick={clearTransfer} disabled={transferring}>
-                      Clear
-                    </button>
-                  </div>
-
-                  {transferRes ? (
-                    <div className="sx-subcard">
-                      <div className="sx-subhead">
-                        <div>
-                          <div className="sx-subtitle">Transfer result</div>
-                          <div className="sx-submeta">Chain + state change evidence</div>
-                        </div>
-                      </div>
-
-                      <div className="sx-kv sx-kv-tight">
-                        <div className="sx-kv-row">
-                          <span className="sx-k">prev_state_hash</span>
-                          <span className="sx-v sx-mono">
-                            <span className="sx-inline">
-                              <span>{short(transferEvidence.prev_state_hash, 14)}</span>
-                              <button className="sx-mini" type="button" onClick={() => copyText(transferEvidence.prev_state_hash)} disabled={!normalize(transferEvidence.prev_state_hash)}>
-                                Copy
-                              </button>
-                            </span>
-                          </span>
-                        </div>
-                        <div className="sx-kv-row">
-                          <span className="sx-k">new_state_hash</span>
-                          <span className="sx-v sx-mono">
-                            <span className="sx-inline">
-                              <span>{short(transferEvidence.new_state_hash, 14)}</span>
-                              <button className="sx-mini" type="button" onClick={() => copyText(transferEvidence.new_state_hash)} disabled={!normalize(transferEvidence.new_state_hash)}>
-                                Copy
-                              </button>
-                            </span>
-                          </span>
-                        </div>
-                        <div className="sx-kv-row">
-                          <span className="sx-k">chain_transfer_tx_hash</span>
-                          <span className="sx-v sx-mono">
-                            <span className="sx-inline">
-                              <span>{short(transferEvidence.chain_transfer_tx_hash, 14)}</span>
-                              <button className="sx-mini" type="button" onClick={() => copyText(transferEvidence.chain_transfer_tx_hash)} disabled={!normalize(transferEvidence.chain_transfer_tx_hash)}>
-                                Copy
-                              </button>
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-
-                      {qrValue ? (
-                        <div className="sx-qrbox">
-                          <div className="sx-qrhead">
-                            <div>
-                              <div className="sx-subtitle">QR scan link</div>
-                              <div className="sx-submeta">Use Google Lens to open and verify</div>
-                            </div>
-                            <div className="sx-qractions">
-                              <button className="sx-btn sx-btn-ghost" type="button" onClick={() => copyText(qrValue)}>
-                                Copy link
-                              </button>
-                              <button className="sx-btn sx-btn-ghost" type="button" onClick={downloadQr} disabled={!qrPng}>
-                                Download QR
-                              </button>
-                              <a className="sx-btn sx-btn-ghost sx-link" href={qrValue} target="_blank" rel="noreferrer">
-                                Open
-                              </a>
-                            </div>
-                          </div>
-
-                          <div className="sx-qrgrid">
-                            <div className="sx-qrpayload sx-mono">{qrValue}</div>
-                            <div className="sx-qrimgwrap">{qrPng ? <img className="sx-qrimg" src={qrPng} alt="qr" /> : <div className="sx-placeholder">QR preview</div>}</div>
-                          </div>
-
-                          <button className="sx-btn sx-btn-ghost sx-full" type="button" onClick={fillScanInputsFromPayload}>
-                            Fill verify fields
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
 
                 <div className="sx-card">

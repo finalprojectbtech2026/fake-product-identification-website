@@ -29,6 +29,12 @@ function Customer() {
   const mountedRef = useRef(true);
   const scannerId = "cv-qr-reader";
 
+  const clearedOnceRef = useRef(false);
+  const clearNonceRef = useRef(0);
+
+  const [imgOk, setImgOk] = useState(false);
+  const [imgLoading, setImgLoading] = useState(false);
+
   const showToast = useCallback((msg) => {
     setToast(msg);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -79,6 +85,33 @@ function Customer() {
 
   const parsedFromQr = useMemo(() => extractFromText(qrPayload), [qrPayload, extractFromText]);
 
+  const stopScanner = useCallback(async () => {
+    try {
+      const inst = scannerRef.current;
+      if (inst) {
+        await inst.stop().catch(() => {});
+        await inst.clear().catch(() => {});
+      }
+    } finally {
+      scannerRef.current = null;
+      setScannerOn(false);
+    }
+  }, []);
+
+  const clearAll = useCallback(async () => {
+    clearedOnceRef.current = true;
+    clearNonceRef.current += 1;
+    setQrPayload("");
+    setProductId("");
+    setStateHash("");
+    setResData(null);
+    setError("");
+    setLoading(false);
+    setImgOk(false);
+    setImgLoading(false);
+    await stopScanner();
+  }, [stopScanner]);
+
   useEffect(() => {
     const pid = normalize(searchParams.get("productId"));
     const sh = normalize(searchParams.get("stateHash"));
@@ -86,6 +119,7 @@ function Customer() {
       setProductId(pid);
       setStateHash(sh);
       setQrPayload("");
+      clearedOnceRef.current = false;
     }
   }, [searchParams]);
 
@@ -93,6 +127,7 @@ function Customer() {
     if (parsedFromQr) {
       setProductId(parsedFromQr.productId);
       setStateHash(parsedFromQr.stateHash);
+      clearedOnceRef.current = false;
     }
   }, [parsedFromQr]);
 
@@ -100,13 +135,18 @@ function Customer() {
     async (overridePid, overrideSh) => {
       const pid = normalize(overridePid ?? productId);
       const sh = normalize(overrideSh ?? stateHash);
+
       if (!pid || !sh) {
+        setResData(null);
         setError("Paste QR link or payload, or enter productId and stateHash.");
         return;
       }
+
+      clearedOnceRef.current = false;
       setError("");
       setLoading(true);
       setResData(null);
+
       try {
         const data = await apiFetch("/api/products/scan", {
           method: "POST",
@@ -114,7 +154,11 @@ function Customer() {
           body: JSON.stringify({ productId: pid, stateHash: sh })
         });
         if (!mountedRef.current) return;
-        setResData(data);
+
+        clearNonceRef.current += 1;
+        const enriched = { ...(data || {}), __img_nonce: clearNonceRef.current };
+        setResData(enriched);
+
         showToast("Verification completed");
       } catch (e) {
         if (!mountedRef.current) return;
@@ -133,17 +177,10 @@ function Customer() {
     if (pid && sh) scanVerify(pid, sh);
   }, [searchParams, scanVerify]);
 
-  const clearAll = useCallback(() => {
-    setQrPayload("");
-    setProductId("");
-    setStateHash("");
-    setResData(null);
-    setError("");
-  }, []);
-
   const verdict = resData?.verdict || null;
   const product = resData?.product || null;
   const events = Array.isArray(resData?.events) ? resData.events : [];
+  const imgNonce = resData?.__img_nonce || 0;
 
   const meta = product?.meta_json || {};
 
@@ -170,10 +207,18 @@ function Customer() {
     "";
 
   const ipfsCid = normalize(product?.ipfs_cid) || normalize(meta?.ipfs_cid) || normalize(meta?.ipfsCid) || "";
-  const ipfsUrl = ipfsCid ? `https://gateway.pinata.cloud/ipfs/${ipfsCid}` : "";
+  const ipfsUrlBase = ipfsCid ? `https://gateway.pinata.cloud/ipfs/${ipfsCid}` : "";
+  const ipfsUrl = ipfsUrlBase ? `${ipfsUrlBase}${ipfsUrlBase.includes("?") ? "&" : "?"}v=${encodeURIComponent(String(imgNonce))}` : "";
 
-  const [imgOk, setImgOk] = useState(false);
-  useEffect(() => setImgOk(false), [ipfsUrl]);
+  useEffect(() => {
+    if (ipfsUrl) {
+      setImgOk(false);
+      setImgLoading(true);
+    } else {
+      setImgOk(false);
+      setImgLoading(false);
+    }
+  }, [ipfsUrl]);
 
   const prettyDate = (d) => {
     const v = normalize(d);
@@ -201,19 +246,6 @@ function Customer() {
     [showToast]
   );
 
-  const stopScanner = useCallback(async () => {
-    try {
-      const inst = scannerRef.current;
-      if (inst) {
-        await inst.stop().catch(() => {});
-        await inst.clear().catch(() => {});
-      }
-    } finally {
-      scannerRef.current = null;
-      setScannerOn(false);
-    }
-  }, []);
-
   const startScanner = useCallback(async () => {
     setError("");
     setResData(null);
@@ -239,6 +271,7 @@ function Customer() {
             setError("QR scanned, but it did not contain a valid link or payload.");
             return;
           }
+          clearedOnceRef.current = false;
           setProductId(extracted.productId);
           setStateHash(extracted.stateHash);
           setQrPayload("");
@@ -341,7 +374,6 @@ function Customer() {
           <div className="cv-hero-row">
             <div>
               <h1 className="cv-hero-title">Verify your product in seconds</h1>
-              
 
               <div className="cv-hero-cta">
                 <button className="cv-btn" type="button" onClick={() => scanVerify()} disabled={loading}>
@@ -415,6 +447,7 @@ function Customer() {
                 onClick={() => {
                   const sample = JSON.stringify({ productId: "P2001", stateHash: "STATE_HASH" });
                   setQrPayload(sample);
+                  clearedOnceRef.current = false;
                   showToast("Example payload inserted");
                 }}
                 disabled={loading}
@@ -442,7 +475,10 @@ function Customer() {
               <textarea
                 className="cv-textarea mono"
                 value={qrPayload}
-                onChange={(e) => setQrPayload(e.target.value)}
+                onChange={(e) => {
+                  setQrPayload(e.target.value);
+                  clearedOnceRef.current = false;
+                }}
                 placeholder='Paste QR link like https://your-site/customer?productId=P2001&stateHash=... or JSON {"productId":"P2001","stateHash":"..."}'
                 disabled={loading}
               />
@@ -456,7 +492,16 @@ function Customer() {
                     Copy
                   </button>
                 </div>
-                <input className="cv-input mono" value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="P2001" disabled={loading} />
+                <input
+                  className="cv-input mono"
+                  value={productId}
+                  onChange={(e) => {
+                    setProductId(e.target.value);
+                    clearedOnceRef.current = false;
+                  }}
+                  placeholder="P2001"
+                  disabled={loading}
+                />
               </div>
 
               <div className="cv-field">
@@ -466,7 +511,16 @@ function Customer() {
                     Copy
                   </button>
                 </div>
-                <input className="cv-input mono" value={stateHash} onChange={(e) => setStateHash(e.target.value)} placeholder="(auto from QR)" disabled={loading} />
+                <input
+                  className="cv-input mono"
+                  value={stateHash}
+                  onChange={(e) => {
+                    setStateHash(e.target.value);
+                    clearedOnceRef.current = false;
+                  }}
+                  placeholder="(auto from QR)"
+                  disabled={loading}
+                />
               </div>
             </div>
 
@@ -474,17 +528,8 @@ function Customer() {
               <button className="cv-btn" type="button" onClick={() => scanVerify()} disabled={loading}>
                 {loading ? "Verifying..." : "Verify Product"}
               </button>
-              <button
-                className="cv-btn ghost"
-                type="button"
-                onClick={() => {
-                  setResData(null);
-                  setError("");
-                  showToast("Cleared result");
-                }}
-                disabled={loading}
-              >
-                Clear result
+              <button className="cv-btn ghost" type="button" onClick={clearAll} disabled={loading}>
+                Clear data
               </button>
             </div>
 
@@ -499,25 +544,39 @@ function Customer() {
               <div className="cv-product-media">
                 {ipfsUrl ? (
                   <>
+                    {imgLoading ? (
+                      <div className="cv-product-img-fallback">
+                        <span className="cv-loader" />
+                      </div>
+                    ) : null}
+
                     <img
                       className={`cv-product-img ${imgOk ? "show" : ""}`}
                       src={ipfsUrl}
                       alt="product"
-                      onLoad={() => setImgOk(true)}
-                      onError={() => setImgOk(false)}
+                      onLoad={() => {
+                        setImgOk(true);
+                        setImgLoading(false);
+                      }}
+                      onError={() => {
+                        setImgOk(false);
+                        setImgLoading(false);
+                      }}
+                      style={{ display: imgOk ? "block" : "none" }}
                     />
-                    {!imgOk ? <div className="cv-product-img-fallback">File is not an image preview</div> : null}
+
+                    {!imgLoading && !imgOk ? <div className="cv-product-img-fallback">File is not an image preview</div> : null}
                   </>
                 ) : (
                   <div className="cv-product-img-fallback">No file</div>
                 )}
 
                 <div className="cv-media-actions">
-                  <button className="cv-btn small ghost" type="button" onClick={() => copyText(ipfsUrl, "IPFS link copied")} disabled={!ipfsUrl}>
+                  <button className="cv-btn small ghost" type="button" onClick={() => copyText(ipfsUrlBase, "IPFS link copied")} disabled={!ipfsUrlBase}>
                     Copy file link
                   </button>
-                  {ipfsUrl ? (
-                    <a className="cv-btn small" href={ipfsUrl} target="_blank" rel="noreferrer">
+                  {ipfsUrlBase ? (
+                    <a className="cv-btn small" href={ipfsUrlBase} target="_blank" rel="noreferrer">
                       Open file
                     </a>
                   ) : (

@@ -843,3 +843,17 @@
     min-height: 260px;
   }
 }
+
+
+.cv-loader{
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid rgba(79, 78, 78, 0.174);
+  border-top-color: black;
+  animation: cvspin 0.9s linear infinite;
+}
+
+@keyframes cvspin{
+  to{ transform: rotate(360deg); }
+}

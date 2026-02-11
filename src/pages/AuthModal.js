@@ -19,6 +19,11 @@ function AuthPage() {
   const [tab, setTab] = useState("login");
   const [roleKey, setRoleKey] = useState("manufacturer");
 
+  const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [address, setAddress] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -56,6 +61,23 @@ function AuthPage() {
   const activeRole = useMemo(() => roles.find((r) => r.key === roleKey) || roles[0], [roleKey]);
   const roleTitle = useMemo(() => activeRole?.title || "User", [activeRole]);
 
+  const roleNeedsDetails = (key) => {
+    const r = String(key || "").toLowerCase().trim();
+    return r === "manufacturer" || r === "seller";
+  };
+
+  const licenseLabel = useMemo(() => {
+    if (roleKey === "seller") return "Seller ID / Licence Number";
+    return "Licence Number";
+  }, [roleKey]);
+
+  const resetSignupFields = () => {
+    setName("");
+    setCompanyName("");
+    setAddress("");
+    setLicenseNumber("");
+  };
+
   const onRoleSelect = (key) => {
     if (loading) return;
     if (key === "customer") {
@@ -64,6 +86,7 @@ function AuthPage() {
     }
     setError("");
     setRoleKey(key);
+    if (!roleNeedsDetails(key)) resetSignupFields();
   };
 
   const approvalGateError = (serverRole, approvalStatus) => {
@@ -87,14 +110,34 @@ function AuthPage() {
     if (!p1 || p1.length < 4) return setError("Password must be at least 4 characters");
     if (tab === "signup" && confirm !== password) return setError("Passwords do not match");
 
+    const needsDetails = tab === "signup" && roleNeedsDetails(roleKey);
+    if (needsDetails) {
+      if (!name.trim()) return setError("Enter name");
+      if (!companyName.trim()) return setError("Enter company name");
+      if (!address.trim()) return setError("Enter address");
+      if (!licenseNumber.trim()) return setError("Enter licence number");
+    }
+
     setLoading(true);
 
     try {
       if (tab === "signup") {
+        const payload = needsDetails
+          ? {
+              role: roleKey,
+              name: name.trim(),
+              company_name: companyName.trim(),
+              email: e1,
+              address: address.trim(),
+              license_number: licenseNumber.trim(),
+              password: p1
+            }
+          : { role: roleKey, email: e1, password: p1 };
+
         const resp = await fetch(`${API_BASE}/api/auth/signup`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: roleKey, email: e1, password: p1 })
+          body: JSON.stringify(payload)
         });
 
         const data = await safeJson(resp);
@@ -173,6 +216,8 @@ function AuthPage() {
     }
   };
 
+  const showSignupDetails = tab === "signup" && roleNeedsDetails(roleKey);
+
   return (
     <div className="authp-page">
       <Navbar />
@@ -208,7 +253,7 @@ function AuthPage() {
                         <div className="authx-roleIcon">
                           <Icon />
                         </div>
-                        {isConsumer ? <div className="authx-pill">No login</div> : null}
+                        {isConsumer ? <div className="authx-pill"></div> : null}
                       </div>
                       <div className="authx-roleName">{r.title}</div>
                       <div className="authx-roleDesc">{r.desc}</div>
@@ -255,6 +300,59 @@ function AuthPage() {
                 </div>
 
                 <form className="authx-form" onSubmit={onSubmit}>
+                  {showSignupDetails ? (
+                    <>
+                      <div className="authx-field">
+                        <label className="authx-label">Name</label>
+                        <input
+                          className="authx-input"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="Enter name"
+                          type="text"
+                          autoComplete="name"
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div className="authx-field">
+                        <label className="authx-label">Company Name</label>
+                        <input
+                          className="authx-input"
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          placeholder="Enter company name"
+                          type="text"
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div className="authx-field">
+                        <label className="authx-label">Address</label>
+                        <input
+                          className="authx-input"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Enter address"
+                          type="text"
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div className="authx-field">
+                        <label className="authx-label">{licenseLabel}</label>
+                        <input
+                          className="authx-input"
+                          value={licenseNumber}
+                          onChange={(e) => setLicenseNumber(e.target.value)}
+                          placeholder={licenseLabel}
+                          type="text"
+                          disabled={loading}
+                        />
+                      </div>
+                    </>
+                  ) : null}
+
                   <div className="authx-field">
                     <label className="authx-label">Email</label>
                     <input

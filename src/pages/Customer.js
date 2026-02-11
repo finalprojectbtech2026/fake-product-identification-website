@@ -336,16 +336,12 @@ function Customer() {
               <span className="cv-dot" />
               Customer verification
             </div>
-            <div className="cv-chip ghost">QR link, QR payload, or camera scan</div>
-            <div className="cv-chip ghost">Blockchain + cloud integrity checks</div>
           </div>
 
           <div className="cv-hero-row">
             <div>
               <h1 className="cv-hero-title">Verify your product in seconds</h1>
-              <p className="cv-hero-desc">
-                Scan the QR code or paste the QR link or JSON payload. You will see only the available product details, NFC reference (if available), and the full history timeline.
-              </p>
+              
 
               <div className="cv-hero-cta">
                 <button className="cv-btn" type="button" onClick={() => scanVerify()} disabled={loading}>

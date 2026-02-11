@@ -1,4 +1,3 @@
-// D:\fpi\frontend\src\pages\Seller.js
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
@@ -103,19 +102,6 @@ function Seller() {
       return "{}";
     }
   }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("auth_user");
-    setAuthToken("");
-    setAuthUser(null);
-    setMe(null);
-    setWalletLinked(null);
-    setSelectedProduct(null);
-    setProducts([]);
-    setHistory([]);
-    navigate("/");
-  }, [navigate]);
 
   const goLogin = useCallback(() => {
     navigate("/auth");
@@ -231,7 +217,10 @@ function Seller() {
     const email = normalize(me?.email || authUser?.email) || "";
     const role = normalize(me?.role || authUser?.role) || "";
     const createdAt = normalize(me?.created_at || authUser?.created_at) || "";
-    return { email, role, createdAt };
+    const name = normalize(me?.name || authUser?.name) || "";
+    const companyName = normalize(me?.company_name || authUser?.company_name) || "";
+    const licenseNumber = normalize(me?.license_number || authUser?.license_number) || "";
+    return { email, role, createdAt, name, companyName, licenseNumber };
   }, [me, authUser]);
 
   const approvalBadge = useMemo(() => {
@@ -580,11 +569,7 @@ function Seller() {
             <button className="sx-btn sx-btn-primary" type="button" onClick={goLogin}>
               Login
             </button>
-          ) : (
-            <button className="sx-btn sx-btn-ghost" type="button" onClick={logout}>
-              Logout
-            </button>
-          )}
+          ) : null}
         </div>
       </header>
 
@@ -610,6 +595,18 @@ function Seller() {
                   <span className="sx-meta-v">{isAuthed ? (isSeller ? "seller" : normalize(me?.role || authUser?.role) || "-") : "-"}</span>
                 </div>
                 <div className="sx-meta-row">
+                  <span className="sx-meta-k">Name</span>
+                  <span className="sx-meta-v">{normalize(identity.name) || "-"}</span>
+                </div>
+                <div className="sx-meta-row">
+                  <span className="sx-meta-k">Company</span>
+                  <span className="sx-meta-v">{normalize(identity.companyName) || "-"}</span>
+                </div>
+                <div className="sx-meta-row">
+                  <span className="sx-meta-k">License</span>
+                  <span className="sx-meta-v sx-mono">{normalize(identity.licenseNumber) || "-"}</span>
+                </div>
+                <div className="sx-meta-row">
                   <span className="sx-meta-k">Wallet</span>
                   <span className="sx-meta-v sx-mono">{short(walletStatus, 12)}</span>
                 </div>
@@ -630,13 +627,31 @@ function Seller() {
 
                 <div className="sx-kv">
                   <div className="sx-kv-row">
+                    <span className="sx-k">Name</span>
+                    <span className="sx-v">{normalize(identity.name) || "-"}</span>
+                  </div>
+
+                  <div className="sx-kv-row">
+                    <span className="sx-k">Company</span>
+                    <span className="sx-v">{normalize(identity.companyName) || "-"}</span>
+                  </div>
+
+                  <div className="sx-kv-row">
+                    <span className="sx-k">License</span>
+                    <span className="sx-v sx-mono">
+                      <span className="sx-inline">
+                        <span>{normalize(identity.licenseNumber) || "-"}</span>
+                       
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="sx-kv-row">
                     <span className="sx-k">Email</span>
                     <span className="sx-v">
                       <span className="sx-inline">
                         <span>{normalize(identity.email) || "-"}</span>
-                        <button className="sx-mini" type="button" onClick={() => copyText(identity.email)} disabled={!normalize(identity.email)}>
-                          Copy
-                        </button>
+                        
                       </span>
                     </span>
                   </div>
@@ -676,13 +691,7 @@ function Seller() {
                 <div className="sx-form">
                   <div className="sx-field">
                     <label className="sx-label">Wallet address</label>
-                    <input
-                      className="sx-input sx-mono"
-                      value={walletAddress}
-                      onChange={(e) => setWalletAddress(e.target.value)}
-                      placeholder="0x..."
-                      disabled={walletLinking || transferring || !canUsePortal}
-                    />
+                    <input className="sx-input sx-mono" value={walletAddress} onChange={(e) => setWalletAddress(e.target.value)} placeholder="0x..." disabled={walletLinking || transferring || !canUsePortal} />
                   </div>
 
                   <div className="sx-actions">
@@ -799,10 +808,7 @@ function Seller() {
                         <div className="sx-kv-row">
                           <span className="sx-k">Owner</span>
                           <span className="sx-v sx-mono">
-                            {short(
-                              normalize(selectedProduct?.owner_wallet || selectedProduct?.ownerWallet || selectedProduct?.current_owner_wallet || selectedProduct?.wallet_address),
-                              14
-                            )}
+                            {short(normalize(selectedProduct?.owner_wallet || selectedProduct?.ownerWallet || selectedProduct?.current_owner_wallet || selectedProduct?.wallet_address), 14)}
                           </span>
                         </div>
                         <div className="sx-kv-row">
@@ -953,12 +959,7 @@ function Seller() {
                           <span className="sx-v sx-mono">
                             <span className="sx-inline">
                               <span>{short(transferEvidence.chain_transfer_tx_hash, 14)}</span>
-                              <button
-                                className="sx-mini"
-                                type="button"
-                                onClick={() => copyText(transferEvidence.chain_transfer_tx_hash)}
-                                disabled={!normalize(transferEvidence.chain_transfer_tx_hash)}
-                              >
+                              <button className="sx-mini" type="button" onClick={() => copyText(transferEvidence.chain_transfer_tx_hash)} disabled={!normalize(transferEvidence.chain_transfer_tx_hash)}>
                                 Copy
                               </button>
                             </span>
@@ -1031,9 +1032,7 @@ function Seller() {
                   {verdict ? (
                     <div className={`sx-verdict ${verdict.isAuthentic ? "sx-verdict-ok" : "sx-verdict-bad"}`}>
                       <div className="sx-verdict-top">
-                        <div className={`sx-verdict-badge ${verdict.isAuthentic ? "sx-badge-ok" : "sx-badge-bad"}`}>
-                          {verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}
-                        </div>
+                        <div className={`sx-verdict-badge ${verdict.isAuthentic ? "sx-badge-ok" : "sx-badge-bad"}`}>{verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}</div>
                         <div className="sx-verdict-msg">{verdict.message || ""}</div>
                       </div>
 

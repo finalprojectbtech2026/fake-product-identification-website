@@ -107,13 +107,7 @@ function Regulator() {
     if (!meLoading && (me || authUser) && !isRegulator) setError("Please login as Regulator to use this portal.");
   }, [isAuthed, meLoading, me, authUser, isRegulator]);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("auth_user");
-    setAuthToken("");
-    setAuthUser(null);
-    navigate("/");
-  }, [navigate]);
+  
 
   const copyText = useCallback(
     async (text) => {
@@ -209,7 +203,19 @@ function Regulator() {
       const email = normalize(u?.email).toLowerCase();
       const wallet = normalize(u?.wallet_address).toLowerCase();
       const id = normalize(u?.id).toLowerCase();
-      return email.includes(q) || wallet.includes(q) || id.includes(q);
+      const name = normalize(u?.name).toLowerCase();
+      const company = normalize(u?.company_name).toLowerCase();
+      const license = normalize(u?.license_number).toLowerCase();
+      const address = normalize(u?.address).toLowerCase();
+      return (
+        email.includes(q) ||
+        wallet.includes(q) ||
+        id.includes(q) ||
+        name.includes(q) ||
+        company.includes(q) ||
+        license.includes(q) ||
+        address.includes(q)
+      );
     });
   }, [users, userSearch]);
 
@@ -224,7 +230,11 @@ function Regulator() {
     return [
       ["id", selectedUser.id || "-"],
       ["role", selectedUser.role || "-"],
+      ["name", selectedUser.name || "-"],
+      ["company_name", selectedUser.company_name || "-"],
       ["email", selectedUser.email || "-"],
+      ["address", selectedUser.address || "-"],
+      ["license_number", selectedUser.license_number || "-"],
       ["wallet_address", selectedUser.wallet_address || "-"],
       ["approval_status", userStatusText(selectedUser)],
       ["approval_notes", selectedUser.approval_notes || "-"],
@@ -467,17 +477,20 @@ function Regulator() {
     if (activeTab === "products") loadProducts();
   }, [activeTab, isAuthed, isRegulator, loadUsers, loadProducts]);
 
-  const renderKeyValue = useCallback((k, v, opts = {}) => {
-    const value = String(v ?? "-");
-    const mono = opts.mono ? "mono" : "";
-    const clickable = Boolean(opts.copyValue);
-    return (
-      <div className={`r-kv-row ${clickable ? "clickable" : ""}`} key={k} onClick={clickable ? () => copyText(opts.copyValue) : undefined}>
-        <span className="r-k">{k}</span>
-        <span className={`r-v ${mono}`}>{value}</span>
-      </div>
-    );
-  }, [copyText]);
+  const renderKeyValue = useCallback(
+    (k, v, opts = {}) => {
+      const value = String(v ?? "-");
+      const mono = opts.mono ? "mono" : "";
+      const clickable = Boolean(opts.copyValue);
+      return (
+        <div className={`r-kv-row ${clickable ? "clickable" : ""}`} key={k} onClick={clickable ? () => copyText(opts.copyValue) : undefined}>
+          <span className="r-k">{k}</span>
+          <span className={`r-v ${mono}`}>{value}</span>
+        </div>
+      );
+    },
+    [copyText]
+  );
 
   return (
     <div className="r-shell">
@@ -499,12 +512,8 @@ function Regulator() {
             </button>
           ) : (
             <>
-              <div className="r-session">
-                {meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}
-              </div>
-              <button className="r-btn ghost" type="button" onClick={logout}>
-                Logout
-              </button>
+              <div className="r-session">{meLoading ? "Loading..." : me ? `${me.email} (${me.role})` : "Session active"}</div>
+             
             </>
           )}
         </div>
@@ -514,20 +523,10 @@ function Regulator() {
         {error ? <div className="r-alert">{error}</div> : null}
 
         <div className="r-tabs">
-          <button
-            className={`r-tab-btn ${activeTab === "users" ? "active" : ""}`}
-            type="button"
-            onClick={() => setActiveTab("users")}
-            disabled={!isRegulator}
-          >
+          <button className={`r-tab-btn ${activeTab === "users" ? "active" : ""}`} type="button" onClick={() => setActiveTab("users")} disabled={!isRegulator}>
             Users approval
           </button>
-          <button
-            className={`r-tab-btn ${activeTab === "products" ? "active" : ""}`}
-            type="button"
-            onClick={() => setActiveTab("products")}
-            disabled={!isRegulator}
-          >
+          <button className={`r-tab-btn ${activeTab === "products" ? "active" : ""}`} type="button" onClick={() => setActiveTab("products")} disabled={!isRegulator}>
             Products approval
           </button>
         </div>
@@ -572,34 +571,25 @@ function Regulator() {
                 </div>
 
                 <div className="r-filters">
-                  <select
-                    className="r-select"
-                    value={userStatusFilter}
-                    onChange={(e) => setUserStatusFilter(e.target.value)}
-                    disabled={!isRegulator || usersLoading}
-                  >
+                  <select className="r-select" value={userStatusFilter} onChange={(e) => setUserStatusFilter(e.target.value)} disabled={!isRegulator || usersLoading}>
+                     <option value="ALL">ALL</option>
                     <option value="PENDING">PENDING</option>
                     <option value="APPROVED">APPROVED</option>
                     <option value="REJECTED">REJECTED</option>
-                    <option value="ALL">ALL</option>
+                   
                   </select>
 
-                  <input
-                    className="r-input"
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    placeholder="Search by email, wallet, or id"
-                    disabled={!isRegulator}
-                  />
-                </div>
+                  </div>
               </div>
 
               <div className="r-table-wrap">
                 <table className="r-table r-table-compact">
                   <thead>
                     <tr>
+                      <th>Name</th>
+                      <th>Company</th>
                       <th>Email</th>
-                      <th>Wallet</th>
+                      <th>License</th>
                       <th>Status</th>
                       <th>Created</th>
                       <th className="ta-right">Actions</th>
@@ -609,16 +599,20 @@ function Regulator() {
                     {filteredUsers.map((u) => {
                       const id = normalize(u?.id);
                       const active = id && id === normalize(selectedUserId);
+                      const name = normalize(u?.name) || "-";
+                      const company = normalize(u?.company_name) || "-";
                       const email = normalize(u?.email) || "-";
-                      const wallet = normalize(u?.wallet_address) || "-";
+                      const license = normalize(u?.license_number) || "-";
                       const st = userStatusText(u);
                       const createdAt = fmtDate(u?.created_at);
 
                       return (
                         <tr key={id || email} className={active ? "active" : ""} onClick={() => setSelectedUserId(id)}>
+                          <td data-label="Name">{name}</td>
+                          <td data-label="Company">{company}</td>
                           <td data-label="Email">{email}</td>
-                          <td data-label="Wallet" className="mono">
-                            {wallet === "-" ? "-" : shortWallet(wallet)}
+                          <td data-label="License" className="mono">
+                            {license}
                           </td>
                           <td data-label="Status">
                             <span className={`r-pill ${userPillClass(u)}`}>{st}</span>
@@ -637,7 +631,7 @@ function Regulator() {
 
                     {filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="r-empty">
+                        <td colSpan={7} className="r-empty">
                           {usersLoading ? "Loading..." : "No users found"}
                         </td>
                       </tr>
@@ -651,7 +645,7 @@ function Regulator() {
               <div className="r-card-head">
                 <div>
                   <div className="r-card-title">Review & decision</div>
-                  <div className="r-card-sub">Only user table fields are shown</div>
+                  <div className="r-card-sub">Verify details before approving or rejecting</div>
                 </div>
               </div>
 
@@ -659,37 +653,29 @@ function Regulator() {
                 {selectedUser ? (
                   <>
                     <div className="r-kv">
-                      {selectedUserDetails.map(([k, v]) =>
-                        k === "wallet_address"
-                          ? renderKeyValue(k, v, { mono: true, copyValue: normalize(v) !== "-" ? v : "" })
-                          : renderKeyValue(k, v)
-                      )}
+                      {selectedUserDetails.map(([k, v]) => {
+                        if (k === "wallet_address") return renderKeyValue(k, v, { mono: true, copyValue: normalize(v) !== "-" ? v : "" });
+                        if (k === "license_number") return renderKeyValue(k, v, { mono: true, copyValue: normalize(v) !== "-" ? v : "" });
+                        if (k === "email") return renderKeyValue(k, v, { copyValue: normalize(v) !== "-" ? v : "" });
+                        return renderKeyValue(k, v);
+                      })}
                     </div>
 
                     <div className="r-actions">
                       <button className="r-btn ghost" type="button" onClick={() => copyText(selectedUser.email)} disabled={!normalize(selectedUser.email)}>
                         Copy Email
                       </button>
-                      <button
-                        className="r-btn ghost"
-                        type="button"
-                        onClick={() => copyText(selectedUser.wallet_address)}
-                        disabled={!normalize(selectedUser.wallet_address)}
-                      >
+                      <button className="r-btn ghost" type="button" onClick={() => copyText(selectedUser.license_number)} disabled={!normalize(selectedUser.license_number)}>
+                        Copy License
+                      </button>
+                      <button className="r-btn ghost" type="button" onClick={() => copyText(selectedUser.wallet_address)} disabled={!normalize(selectedUser.wallet_address)}>
                         Copy Wallet
                       </button>
                     </div>
 
                     <div className="r-field" style={{ marginTop: 12 }}>
                       <div className="r-field-label">Notes</div>
-                      <textarea
-                        className="r-textarea"
-                        value={uDecisionNotes}
-                        onChange={(e) => setUDecisionNotes(e.target.value)}
-                        placeholder="Approval notes (optional)"
-                        disabled={uActionLoading || !isRegulator}
-                        rows={4}
-                      />
+                      <textarea className="r-textarea" value={uDecisionNotes} onChange={(e) => setUDecisionNotes(e.target.value)} placeholder="Approval notes (optional)" disabled={uActionLoading || !isRegulator} rows={4} />
                       <div className="r-hint">Saved to approval_notes</div>
                     </div>
 
@@ -750,20 +736,10 @@ function Regulator() {
                               <button className="r-btn small" type="button" onClick={() => setSelectedCode(p.product_code)}>
                                 View
                               </button>
-                              <button
-                                className="r-btn small ghost"
-                                type="button"
-                                onClick={() => auditDecision(p.product_code, "ACCEPT")}
-                                disabled={actionLoading || !isRegulator}
-                              >
+                              <button className="r-btn small ghost" type="button" onClick={() => auditDecision(p.product_code, "ACCEPT")} disabled={actionLoading || !isRegulator}>
                                 Accept
                               </button>
-                              <button
-                                className="r-btn small danger"
-                                type="button"
-                                onClick={() => auditDecision(p.product_code, "REJECT")}
-                                disabled={actionLoading || !isRegulator}
-                              >
+                              <button className="r-btn small danger" type="button" onClick={() => auditDecision(p.product_code, "REJECT")} disabled={actionLoading || !isRegulator}>
                                 Reject
                               </button>
                             </div>
@@ -821,9 +797,7 @@ function Regulator() {
 
                     {scanRes?.verdict ? (
                       <div className="r-verdict">
-                        <div className={`r-verdict-pill ${scanRes.verdict.isAuthentic ? "ok" : "bad"}`}>
-                          {scanRes.verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}
-                        </div>
+                        <div className={`r-verdict-pill ${scanRes.verdict.isAuthentic ? "ok" : "bad"}`}>{scanRes.verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}</div>
                         <div className="r-verdict-msg">{normalize(scanRes.verdict.message) || "-"}</div>
                         <div className="r-kv tight">
                           {renderKeyValue("isLatestDbState", String(Boolean(scanRes.verdict.isLatestDbState)))}
@@ -839,14 +813,7 @@ function Regulator() {
 
                     <div className="r-field">
                       <div className="r-field-label">Reason</div>
-                      <textarea
-                        className="r-textarea"
-                        value={auditReason}
-                        onChange={(e) => setAuditReason(e.target.value)}
-                        placeholder="Write why you accept or reject (optional)"
-                        disabled={actionLoading || !isRegulator}
-                        rows={4}
-                      />
+                      <textarea className="r-textarea" value={auditReason} onChange={(e) => setAuditReason(e.target.value)} placeholder="Write why you accept or reject (optional)" disabled={actionLoading || !isRegulator} rows={4} />
                     </div>
 
                     <div className="r-actions">

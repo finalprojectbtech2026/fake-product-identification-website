@@ -28,11 +28,27 @@ function Navbar() {
     return { token, user, role };
   };
 
-  const getRoleRoute = (role) => {
+  const getRolePortalRoute = (role) => {
     if (role === "manufacturer") return "/manufacturer";
     if (role === "seller") return "/seller";
-    if (role === "customer") return "/customer";
-    return "";
+    if (role === "regulator") return "/regulator";
+    if (role === "customer" || role === "consumer") return "/customer";
+    return "/auth";
+  };
+
+  const getRoleDescRoute = (role) => {
+    if (role === "manufacturer") return "/role/manufacturer";
+    if (role === "seller") return "/role/seller";
+    if (role === "regulator") return "/role/regulator";
+    return "/auth";
+  };
+
+  const roleLabel = (role) => {
+    if (role === "manufacturer") return "Manufacturer";
+    if (role === "seller") return "Seller";
+    if (role === "regulator") return "Regulator";
+    if (role === "customer" || role === "consumer") return "Consumer";
+    return "Role";
   };
 
   useEffect(() => {
@@ -60,45 +76,33 @@ function Navbar() {
     };
   }, []);
 
-  const navLinks = useMemo(
-    () => [
-      { name: "Home", path: "/" },
-      { name: "How it Works", path: "/about" },
-    ],
-    []
-  );
-
-  const isActive = (path) =>
-    path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
+  const isActive = (path) => (path === "/" ? location.pathname === "/" : location.pathname.startsWith(path));
 
   const handleLinkClick = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     setIsMobileOpen(false);
   };
 
-  const goLogin = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setIsMobileOpen(false);
+  const goHome = () => {
+    handleLinkClick();
+    navigate("/");
+  };
 
-    const { token, role } = readSession();
-    if (token && role) {
-      const r = getRoleRoute(role);
-      if (r) return navigate(r);
-    }
+  const goLogin = () => {
+    handleLinkClick();
     navigate("/auth");
   };
 
+  const goRole = () => {
+    handleLinkClick();
+    if (!sessionRole) return navigate("/auth");
+    navigate(getRoleDescRoute(sessionRole));
+  };
+
   const goPortal = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setIsMobileOpen(false);
-
-    const { token, role } = readSession();
-    if (!token) return navigate("/auth");
-
-    const r = getRoleRoute(role);
-    if (r) return navigate(r);
-
-    navigate("/auth");
+    handleLinkClick();
+    if (!sessionRole) return navigate("/auth");
+    navigate(getRolePortalRoute(sessionRole));
   };
 
   const logout = () => {
@@ -134,19 +138,25 @@ function Navbar() {
   }, []);
 
   const authed = Boolean(sessionRole);
-  const portalLabel =
-    sessionRole === "manufacturer"
-      ? "Manufacturer Portal"
-      : sessionRole === "seller"
-      ? "Seller Portal"
-      : sessionRole === "customer"
-      ? "Customer Portal"
-      : "Portal";
 
-  const portalActive =
-    location.pathname.startsWith("/manufacturer") ||
-    location.pathname.startsWith("/seller") ||
-    location.pathname.startsWith("/customer");
+  const desktopLinks = useMemo(() => {
+    if (!authed) {
+      return [
+        { type: "link", name: "Home", path: "/" },
+        { type: "btn", name: "Login", onClick: goLogin, active: location.pathname.startsWith("/auth") }
+      ];
+    }
+
+    const role = sessionRole;
+    return [
+      { type: "link", name: "Home", path: "/" },
+      { type: "btn", name: "Role", onClick: goRole, active: location.pathname.startsWith("/role/") },
+      { type: "btn", name: roleLabel(role), onClick: goPortal, active: isActive(getRolePortalRoute(role)) },
+      { type: "btn", name: "Logout", onClick: logout }
+    ];
+  }, [authed, goLogin, goPortal, goRole, isActive, location.pathname, logout, sessionRole]);
+
+  const mobileLinks = desktopLinks;
 
   return (
     <nav className={`navbar ${hidden ? "navbar-hidden" : ""}`}>
@@ -160,44 +170,31 @@ function Navbar() {
           {isMobileOpen ? <FaTimes /> : <FaBars />}
         </button>
 
-        <Link to="/" className="logo" onClick={handleLinkClick} aria-label="Home">
+        <button type="button" className="logo" onClick={goHome} aria-label="Home">
           <img src="/Images/qr.jpg" alt="logo" />
-        </Link>
+        </button>
 
         <div className="nav-links desktop-only">
-          {navLinks.map(({ name, path }) => (
-            <Link
-              key={name}
-              to={path}
-              onClick={handleLinkClick}
-              className={`nav-link ${isActive(path) ? "active" : ""}`}
-            >
-              {name}
-            </Link>
-          ))}
+          {desktopLinks.map((it) => {
+            if (it.type === "link") {
+              return (
+                <Link key={it.name} to={it.path} onClick={handleLinkClick} className={`nav-link ${isActive(it.path) ? "active" : ""}`}>
+                  {it.name}
+                </Link>
+              );
+            }
 
-          {authed ? (
-            <>
+            return (
               <button
+                key={it.name}
                 type="button"
-                className={`nav-link nav-login ${portalActive ? "active" : ""}`}
-                onClick={goPortal}
+                className={`nav-link nav-login ${it.active ? "active" : ""}`}
+                onClick={it.onClick}
               >
-                {portalLabel}
+                {it.name}
               </button>
-              <button type="button" className="nav-link nav-login" onClick={logout}>
-                Logout
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className={`nav-link nav-login ${location.pathname.startsWith("/auth") ? "active" : ""}`}
-              onClick={goLogin}
-            >
-              Login
-            </button>
-          )}
+            );
+          })}
         </div>
 
         <div className="nav-spacer mobile-only" />
@@ -205,50 +202,35 @@ function Navbar() {
 
       <div className={`mobile-sheet ${isMobileOpen ? "open" : ""}`}>
         <div className="mobile-sheet-head">
-          <button
-            type="button"
-            className="mobile-close"
-            aria-label="Close menu"
-            onClick={() => setIsMobileOpen(false)}
-          >
+          <button type="button" className="mobile-close" aria-label="Close menu" onClick={() => setIsMobileOpen(false)}>
             <FaTimes />
           </button>
         </div>
 
         <div className="mobile-links">
-          {navLinks.map(({ name, path }) => (
-            <Link
-              key={name}
-              to={path}
-              onClick={handleLinkClick}
-              className={`mobile-link ${isActive(path) ? "active" : ""}`}
-            >
-              {name}
-            </Link>
-          ))}
+          {mobileLinks.map((it) => {
+            if (it.type === "link") {
+              return (
+                <Link key={it.name} to={it.path} onClick={handleLinkClick} className={`mobile-link ${isActive(it.path) ? "active" : ""}`}>
+                  {it.name}
+                </Link>
+              );
+            }
 
-          {authed ? (
-            <>
+            return (
               <button
+                key={it.name}
                 type="button"
-                className={`mobile-link mobile-login ${portalActive ? "active" : ""}`}
-                onClick={goPortal}
+                className={`mobile-link mobile-login ${it.active ? "active" : ""}`}
+                onClick={() => {
+                  it.onClick();
+                  setIsMobileOpen(false);
+                }}
               >
-                {portalLabel}
+                {it.name}
               </button>
-              <button type="button" className="mobile-link mobile-login" onClick={logout}>
-                Logout
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className={`mobile-link mobile-login ${location.pathname.startsWith("/auth") ? "active" : ""}`}
-              onClick={goLogin}
-            >
-              Login
-            </button>
-          )}
+            );
+          })}
         </div>
       </div>
 

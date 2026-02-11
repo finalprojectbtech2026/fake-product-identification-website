@@ -155,15 +155,6 @@ function Manufacturer() {
     run();
   }, [isAuthed, refreshMe]);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("auth_user");
-    setAuthToken("");
-    setAuthUser(null);
-    setMe(null);
-    navigate("/");
-  }, [navigate]);
-
   const approvalText = useMemo(() => {
     const raw =
       me?.approval_status ||
@@ -196,13 +187,55 @@ function Manufacturer() {
     return isAuthed && isManufacturer && isApproved;
   }, [isAuthed, isManufacturer, isApproved]);
 
+  const profileName = useMemo(() => {
+    return (
+      normalize(me?.name) ||
+      normalize(me?.full_name) ||
+      normalize(me?.fullname) ||
+      normalize(authUser?.name) ||
+      normalize(authUser?.full_name) ||
+      normalize(authUser?.fullname) ||
+      ""
+    );
+  }, [me, authUser]);
+
+  const profileCompany = useMemo(() => {
+    return (
+      normalize(me?.company_name) ||
+      normalize(me?.company) ||
+      normalize(me?.companyName) ||
+      normalize(authUser?.company_name) ||
+      normalize(authUser?.company) ||
+      normalize(authUser?.companyName) ||
+      ""
+    );
+  }, [me, authUser]);
+
+  const profileLicence = useMemo(() => {
+    return (
+      normalize(me?.licence_number) ||
+      normalize(me?.license_number) ||
+      normalize(me?.licenceNo) ||
+      normalize(me?.licenseNo) ||
+      normalize(authUser?.licence_number) ||
+      normalize(authUser?.license_number) ||
+      normalize(authUser?.licenceNo) ||
+      normalize(authUser?.licenseNo) ||
+      ""
+    );
+  }, [me, authUser]);
+
   const sessionText = useMemo(() => {
     if (meLoading) return "Loading...";
     if (!isAuthed) return "Not logged in";
-    if (me?.email) return `${me.email} (${me.role || "user"})`;
-    if (authUser?.email) return `${authUser.email} (${authUser.role || "user"})`;
-    return "Session active";
-  }, [meLoading, isAuthed, me, authUser]);
+    const email = normalize(me?.email || authUser?.email);
+    const role = normalize(me?.role || authUser?.role) || "user";
+    const parts = [];
+    if (email) parts.push(`${email} (${role})`);
+    if (profileName) parts.push(profileName);
+    if (profileCompany) parts.push(profileCompany);
+    return parts.length ? parts.join(" • ") : "Session active";
+  }, [meLoading, isAuthed, me, authUser, profileName, profileCompany]);
 
   const buildQrUrl = useCallback((productId, stateHash) => {
     const u = new URL(`${WEB_BASE}/scan`);
@@ -606,15 +639,21 @@ function Manufacturer() {
     const wallet = normalize(me?.wallet_address || authUser?.wallet_address) || "-";
     const createdAt = normalize(me?.created_at || authUser?.created_at) || "";
     const id = normalize(me?.id || authUser?.id) || "-";
+    const nm = profileName || "-";
+    const co = profileCompany || "-";
+    const lic = profileLicence || "-";
     return [
       ["status", approvalText],
+      ["name", nm],
+      ["company_name", co],
+      ["licence_number", lic],
       ["email", email],
       ["role", role],
       ["user_id", id],
       ["wallet_address", wallet],
       ["created_at", createdAt ? new Date(createdAt).toLocaleString() : "-"]
     ];
-  }, [me, authUser, approvalText]);
+  }, [me, authUser, approvalText, profileName, profileCompany, profileLicence]);
 
   const selectedStatus = useMemo(() => {
     const st = normalize(selected?.audit_status).toUpperCase();
@@ -671,9 +710,6 @@ function Manufacturer() {
           ) : (
             <>
               <div className="mfg-session">{sessionText}</div>
-              <button className="mfg-btn ghost" type="button" onClick={logout}>
-                Logout
-              </button>
             </>
           )}
         </div>
@@ -749,7 +785,7 @@ function Manufacturer() {
               </div>
 
               <div className="mfg-card-body">
-                <div className="mfg-kv">{meDetails.map(([k, v]) => renderKV(k, v, k === "wallet_address" || k === "user_id"))}</div>
+                <div className="mfg-kv">{meDetails.map(([k, v]) => renderKV(k, v, k === "wallet_address" || k === "user_id" || k === "licence_number"))}</div>
 
                 <div className="mfg-actions">
                   <button className="mfg-btn ghost" type="button" onClick={() => copyText(me?.wallet_address || authUser?.wallet_address || "")} disabled={!normalize(me?.wallet_address || authUser?.wallet_address || "")}>
@@ -803,13 +839,16 @@ function Manufacturer() {
                         </div>
                       </div>
                       <div className="mfg-card-body">
-                        <div className="mfg-kv">{meDetails.map(([k, v]) => renderKV(k, v, k === "wallet_address" || k === "user_id"))}</div>
+                        <div className="mfg-kv">{meDetails.map(([k, v]) => renderKV(k, v, k === "wallet_address" || k === "user_id" || k === "licence_number"))}</div>
                         <div className="mfg-actions">
                           <button className="mfg-btn ghost" type="button" onClick={() => copyText(me?.wallet_address || authUser?.wallet_address || "")} disabled={!normalize(me?.wallet_address || authUser?.wallet_address || "")}>
                             Copy Wallet
                           </button>
                           <button className="mfg-btn ghost" type="button" onClick={() => copyText(me?.email || authUser?.email || "")} disabled={!normalize(me?.email || authUser?.email || "")}>
                             Copy Email
+                          </button>
+                          <button className="mfg-btn ghost" type="button" onClick={() => copyText(profileLicence)} disabled={!normalize(profileLicence)}>
+                            Copy Licence
                           </button>
                         </div>
                       </div>

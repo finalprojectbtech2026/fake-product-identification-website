@@ -163,16 +163,7 @@
   font-size: 18px;
 }
 
-.authx-pill {
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 850;
-  color: rgba(20, 83, 45, 0.95);
-  background: rgba(22, 163, 74, 0.10);
-  border: 1px solid rgba(22, 163, 74, 0.18);
-  white-space: nowrap;
-}
+
 
 .authx-roleName {
   font-size: 14px;

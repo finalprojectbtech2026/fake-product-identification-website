@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import Navbar from "./Navbar";
 import "./Orders.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
@@ -81,6 +80,15 @@ function Orders({ openFromCustomer = false, payload = null, onClose = null }) {
     if (!Number.isFinite(n)) return 1;
     return Math.max(1, Math.min(10, Math.floor(n)));
   }, [form.qty]);
+
+  const pricing = useMemo(() => {
+    const base = 999;
+    const subtotal = base * qty;
+    const shipping = subtotal >= 1500 ? 0 : 49;
+    const tax = Math.round(subtotal * 0.05);
+    const total = subtotal + shipping + tax;
+    return { base, subtotal, shipping, tax, total };
+  }, [qty]);
 
   const short = useCallback((v, n = 10) => {
     const s = normalize(v);
@@ -255,10 +263,7 @@ function Orders({ openFromCustomer = false, payload = null, onClose = null }) {
   );
 
   return (
-    
-    <div className="od-shell">
-     
-
+    <div className={`od-shell ${openFromCustomer ? "od-embedded" : ""}`}>
       <main className="od-main">
         <header className="od-top">
           <div className="od-top-left">
@@ -363,16 +368,9 @@ function Orders({ openFromCustomer = false, payload = null, onClose = null }) {
                       <div className="od-total">
                         <div className="od-total-row">
                           <span>Total</span>
-                          <span className="mono">₹{(() => {
-                            const base = 999;
-                            const subtotal = base * qty;
-                            const shipping = subtotal >= 1500 ? 0 : 49;
-                            const tax = Math.round(subtotal * 0.05);
-                            const total = subtotal + shipping + tax;
-                            return total;
-                          })()}</span>
+                          <span className="mono">₹{pricing.total}</span>
                         </div>
-                        <div className="od-total-sub">Includes shipping and tax</div>
+                        <div className="od-total-sub">Shipping: {pricing.shipping === 0 ? "Free" : `₹${pricing.shipping}`} , Tax: ₹{pricing.tax}</div>
                       </div>
                     </div>
                   </div>

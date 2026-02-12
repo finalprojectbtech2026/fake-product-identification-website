@@ -279,7 +279,14 @@ function Seller() {
         data = await apiFetch("/api/products", { method: "GET", noCache: true });
       }
       const list = data?.products || data?.items || data?.data || data || [];
-      setProducts(Array.isArray(list) ? list : []);
+      const arr = Array.isArray(list) ? list : [];
+      const normalizedProducts = arr.map((p) => {
+        const raw = normalize(p?.status || p?.sale_status || p?.saleStatus || "");
+        const t = raw ? raw.toUpperCase() : "";
+        const status = t === "SOLD" ? "SOLD" : t === "OWNED" ? "OWNED" : t ? t : "OWNED";
+        return { ...p, status };
+      });
+      setProducts(normalizedProducts);
     } catch (e) {
       setProductsErr(String(e?.message || e));
       setProducts([]);
@@ -385,8 +392,9 @@ function Seller() {
   }, []);
 
   const rowStatus = useCallback((p) => {
-    const raw = normalize(p?.audit_status || p?.status || p?.stage || p?.state || "");
+    const raw = normalize(p?.status || p?.sale_status || p?.saleStatus || p?.audit_status || p?.stage || p?.state || "");
     const t = raw ? raw.toUpperCase() : "OWNED";
+    if (t === "SOLD") return { text: "SOLD", cls: "sx-chip sx-chip-bad" };
     if (["ACCEPT", "APPROVED", "ACTIVE", "VERIFIED", "OWNED"].includes(t)) return { text: "OWNED", cls: "sx-chip sx-chip-ok" };
     if (["REJECT", "REJECTED", "BLOCKED", "DISABLED"].includes(t)) return { text: "BLOCKED", cls: "sx-chip sx-chip-bad" };
     if (["PENDING", "REVIEW", "REQUESTED"].includes(t)) return { text: "PENDING", cls: "sx-chip sx-chip-warn" };
@@ -658,11 +666,19 @@ function Seller() {
                       <div className="sx-subhead">
                         <div>
                           <div className="sx-subtitle">Selected product</div>
-                          <div className="sx-submeta">{normalize(selectedProduct?.product_code || selectedProduct?.productId || selectedProduct?.product_id || selectedProduct?.code || selectedProduct?.id) || "-"}</div>
+                          <div className="sx-submeta">
+                            {normalize(selectedProduct?.product_code || selectedProduct?.productId || selectedProduct?.product_id || selectedProduct?.code || selectedProduct?.id) || "-"}
+                          </div>
                         </div>
                       </div>
 
                       <div className="sx-kv sx-kv-tight">
+                        <div className="sx-kv-row">
+                          <span className="sx-k">Status</span>
+                          <span className="sx-v">
+                            <span className={rowStatus(selectedProduct).cls}>{rowStatus(selectedProduct).text}</span>
+                          </span>
+                        </div>
                         <div className="sx-kv-row">
                           <span className="sx-k">Owner</span>
                           <span className="sx-v sx-mono">

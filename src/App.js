@@ -8,6 +8,7 @@ import AuthModal from "./pages/AuthModal";
 import ManufacturerDescription from "./pages/ManufacturerDescription";
 import SellerDescription from "./pages/SellerDescription";
 import RegulatorDescription from "./pages/RegulatorDescription";
+import Orders from "./pages/Orders";
 
 function App() {
   return (
@@ -26,6 +27,8 @@ function App() {
         <Route path="/role/regulator" element={<RegulatorDescription />} />
 
         <Route path="/auth" element={<AuthModal />} />
+
+        <Route path="/orders" element={<Orders />} />
       </Routes>
     </Router>
   );

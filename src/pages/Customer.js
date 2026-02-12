@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom";
 import { Html5Qrcode } from "html5-qrcode";
 import Navbar from "./Navbar";
+import Orders from "./Orders";
 import "./Customer.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
@@ -34,6 +35,8 @@ function Customer() {
 
   const [imgOk, setImgOk] = useState(false);
   const [imgLoading, setImgLoading] = useState(false);
+
+  const [ordersOpen, setOrdersOpen] = useState(false);
 
   const showToast = useCallback((msg) => {
     setToast(msg);
@@ -109,6 +112,7 @@ function Customer() {
     setLoading(false);
     setImgOk(false);
     setImgLoading(false);
+    setOrdersOpen(false);
     await stopScanner();
   }, [stopScanner]);
 
@@ -146,6 +150,7 @@ function Customer() {
       setError("");
       setLoading(true);
       setResData(null);
+      setOrdersOpen(false);
 
       try {
         const data = await apiFetch("/api/products/scan", {
@@ -249,6 +254,7 @@ function Customer() {
   const startScanner = useCallback(async () => {
     setError("");
     setResData(null);
+    setOrdersOpen(false);
 
     if (!window.isSecureContext && window.location.hostname !== "localhost") {
       setError("Camera scanning needs HTTPS (or run on localhost). Paste the QR link/payload instead.");
@@ -353,6 +359,39 @@ function Customer() {
     return `${window.location.origin}/customer?productId=${encodeURIComponent(pid)}&stateHash=${encodeURIComponent(sh)}`;
   }, [productId, stateHash]);
 
+  const canPurchase = useMemo(() => {
+    if (!verdict) return false;
+    if (!verdict.isAuthentic) return false;
+    if (!hasValue(productId) || !hasValue(stateHash)) return false;
+    return true;
+  }, [verdict, productId, stateHash]);
+
+  const openOrders = useCallback(() => {
+    if (!canPurchase) return;
+    setOrdersOpen(true);
+  }, [canPurchase]);
+
+  const closeOrders = useCallback(() => {
+    setOrdersOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") setOrdersOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const ordersPayload = useMemo(() => {
+    return {
+      productId: normalize(productId),
+      stateHash: normalize(stateHash),
+      product: product || null,
+      verdict: verdict || null
+    };
+  }, [productId, stateHash, product, verdict]);
+
   return (
     <div className="cv-shell">
       <Navbar />
@@ -385,6 +424,11 @@ function Customer() {
                 <button className="cv-btn ghost" type="button" onClick={clearAll} disabled={loading}>
                   Clear
                 </button>
+                {canPurchase ? (
+                  <button className="cv-btn" type="button" onClick={openOrders} disabled={loading}>
+                    Purchase
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -531,6 +575,11 @@ function Customer() {
               <button className="cv-btn ghost" type="button" onClick={clearAll} disabled={loading}>
                 Clear data
               </button>
+              {canPurchase ? (
+                <button className="cv-btn" type="button" onClick={openOrders} disabled={loading}>
+                  Purchase
+                </button>
+              ) : null}
             </div>
 
             {error ? <div className="cv-error">{error}</div> : null}
@@ -609,6 +658,14 @@ function Customer() {
                     <div className="cv-flag-text">{sellerVerified ? "Seller verified" : "Seller not verified"}</div>
                   </div>
                 ) : null}
+
+                {canPurchase ? (
+                  <div style={{ marginTop: 12 }}>
+                    <button className="cv-btn" type="button" onClick={openOrders} disabled={loading}>
+                      Purchase
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -673,6 +730,69 @@ function Customer() {
       </footer>
 
       {toast ? <div className="cv-toast">{toast}</div> : null}
+
+      {ordersOpen ? (
+        <div
+          className="cv-modal"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeOrders();
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 9999
+          }}
+        >
+          <div
+            className="cv-modal-card"
+            style={{
+              width: "min(980px, 100%)",
+              maxHeight: "min(86vh, 900px)",
+              overflow: "auto",
+              borderRadius: 16,
+              background: "#0c0f16",
+              boxShadow: "0 20px 80px rgba(0,0,0,0.45)",
+              border: "1px solid rgba(255,255,255,0.08)"
+            }}
+          >
+            <div
+              className="cv-modal-head"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "14px 14px",
+                borderBottom: "1px solid rgba(255,255,255,0.08)"
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div style={{ fontWeight: 700, color: "#fff" }}>Orders</div>
+                <div style={{ opacity: 0.75, fontSize: 12 }}>
+                  {normalize(productId) ? `Product: ${normalize(productId)}` : "Create a new order"}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button className="cv-btn ghost small" type="button" onClick={closeOrders}>
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: 14 }}>
+              <Orders openFromCustomer={true} payload={ordersPayload} onClose={closeOrders} />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import Orders from "./Orders";
 import "./Customer.css";
 
 const API_BASE = "https://fake-product-identification-backend.vercel.app";
+
 const normalize = (v) => String(v ?? "").trim();
 const hasValue = (v) => {
   const s = normalize(v);
@@ -38,6 +39,9 @@ function Customer() {
 
   const [ordersOpen, setOrdersOpen] = useState(false);
 
+  const [soldByMine, setSoldByMine] = useState(false);
+  const [soldChecked, setSoldChecked] = useState(false);
+
   const showToast = useCallback((msg) => {
     setToast(msg);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -68,8 +72,8 @@ function Customer() {
     if (raw.startsWith("http://") || raw.startsWith("https://")) {
       try {
         const u = new URL(raw);
-        const pid = normalize(u.searchParams.get("productId"));
-        const sh = normalize(u.searchParams.get("stateHash"));
+        const pid = normalize(u.searchParams.get("productId")) || normalize(u.searchParams.get("product_code"));
+        const sh = normalize(u.searchParams.get("stateHash")) || normalize(u.searchParams.get("state_hash"));
         if (pid && sh) return { productId: pid, stateHash: sh };
       } catch {}
     }
@@ -77,8 +81,8 @@ function Customer() {
     try {
       const obj = JSON.parse(raw);
       if (!obj || typeof obj !== "object") return null;
-      const pid = normalize(obj.productId);
-      const sh = normalize(obj.stateHash);
+      const pid = normalize(obj.productId) || normalize(obj.product_code);
+      const sh = normalize(obj.stateHash) || normalize(obj.state_hash);
       if (!pid || !sh) return null;
       return { productId: pid, stateHash: sh };
     } catch {}
@@ -113,12 +117,14 @@ function Customer() {
     setImgOk(false);
     setImgLoading(false);
     setOrdersOpen(false);
+    setSoldByMine(false);
+    setSoldChecked(false);
     await stopScanner();
   }, [stopScanner]);
 
   useEffect(() => {
-    const pid = normalize(searchParams.get("productId"));
-    const sh = normalize(searchParams.get("stateHash"));
+    const pid = normalize(searchParams.get("productId")) || normalize(searchParams.get("product_code"));
+    const sh = normalize(searchParams.get("stateHash")) || normalize(searchParams.get("state_hash"));
     if (pid && sh) {
       setProductId(pid);
       setStateHash(sh);
@@ -151,6 +157,8 @@ function Customer() {
       setLoading(true);
       setResData(null);
       setOrdersOpen(false);
+      setSoldByMine(false);
+      setSoldChecked(false);
 
       try {
         const data = await apiFetch("/api/products/scan", {
@@ -177,22 +185,23 @@ function Customer() {
   );
 
   useEffect(() => {
-    const pid = normalize(searchParams.get("productId"));
-    const sh = normalize(searchParams.get("stateHash"));
+    const pid = normalize(searchParams.get("productId")) || normalize(searchParams.get("product_code"));
+    const sh = normalize(searchParams.get("stateHash")) || normalize(searchParams.get("state_hash"));
     if (pid && sh) scanVerify(pid, sh);
   }, [searchParams, scanVerify]);
 
   const verdict = resData?.verdict || null;
   const product = resData?.product || null;
-  const events = Array.isArray(resData?.events) ? resData.events : [];
+  const rawEvents = Array.isArray(resData?.events) ? resData.events : [];
   const imgNonce = resData?.__img_nonce || 0;
 
-  const meta = product?.meta_json || {};
+  const meta = product?.meta_json && typeof product.meta_json === "object" ? product.meta_json : {};
 
   const productName = normalize(product?.name) || normalize(meta?.name) || "";
-  const productCode = normalize(product?.product_code) || normalize(meta?.product_code) || "";
+  const productCode = normalize(product?.product_code) || normalize(meta?.product_code) || normalize(productId) || "";
   const batch = normalize(product?.batch) || normalize(meta?.batch) || "";
   const brand = normalize(meta?.brand) || "";
+  const statusFromScan = normalize(product?.sale_status) || normalize(product?.status) || normalize(meta?.sale_status) || normalize(meta?.status) || "";
 
   const manufacturer = normalize(meta?.manufacturer) || normalize(meta?.mfg) || normalize(meta?.manufacturer_name) || "";
   const serialNo = normalize(meta?.serial_no) || normalize(meta?.serialNumber) || normalize(meta?.serial) || "";
@@ -224,6 +233,59 @@ function Customer() {
       setImgLoading(false);
     }
   }, [ipfsUrl]);
+
+  const isSoldFromScan = useMemo(() => {
+    const v = normalize(verdict?.isSold);
+    if (v) return String(verdict?.isSold) === "true";
+    return normalize(statusFromScan).toUpperCase() === "SOLD";
+  }, [verdict, statusFromScan]);
+
+  const isSold = useMemo(() => isSoldFromScan || soldByMine, [isSoldFromScan, soldByMine]);
+
+  useEffect(() => {
+    const pc = normalize(productCode);
+    if (!pc) return;
+
+    if (isSoldFromScan) {
+      setSoldByMine(false);
+      setSoldChecked(true);
+      return;
+    }
+
+    const token = normalize(localStorage.getItem("token") || localStorage.getItem("access_token") || "");
+    if (!token) {
+      setSoldByMine(false);
+      setSoldChecked(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const data = await apiFetch("/api/products/mine", {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (cancelled) return;
+
+        const arr = Array.isArray(data?.products) ? data.products : [];
+        const match = arr.find((p) => normalize(p?.product_code) === pc);
+        const st = normalize(match?.status).toUpperCase();
+        setSoldByMine(st === "SOLD");
+        setSoldChecked(true);
+      } catch {
+        if (cancelled) return;
+        setSoldByMine(false);
+        setSoldChecked(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch, productCode, isSoldFromScan]);
 
   const prettyDate = (d) => {
     const v = normalize(d);
@@ -317,9 +379,10 @@ function Customer() {
     push("Database hash matches cloud", verdict.dbCloudHashMatches, "Matched", "Mismatch");
     push("Blockchain hash matches cloud", verdict.chainCloudHashMatches, "Matched", "Mismatch");
     push("NFC linked to product", verdict.nfcMatches ?? verdict.nfcUidMatches ?? verdict.isNfcValid, "Matched", "Mismatch");
+    push("Sale status", !isSold, "Available", "SOLD");
 
     return items;
-  }, [verdict]);
+  }, [verdict, isSold]);
 
   const overallTone = verdict?.isAuthentic ? "ok" : verdict ? "bad" : "neutral";
 
@@ -329,6 +392,36 @@ function Customer() {
     if (email) return role ? `${email} (${role})` : email;
     return normalize(e?.actor_id) || "-";
   };
+
+  const events = useMemo(() => {
+    const mapped = rawEvents.map((e) => ({
+      ...e,
+      __type: normalize(e?.event_type) || "EVENT"
+    }));
+
+    const hasSoldAlready = mapped.some((e) => normalize(e.__type).toUpperCase() === "SOLD" || normalize(e.__type).toUpperCase() === "PURCHASE");
+    if (!hasSoldAlready && isSold) {
+      const lastTs =
+        mapped.length && mapped[mapped.length - 1]?.created_at
+          ? new Date(mapped[mapped.length - 1].created_at).getTime()
+          : Date.now();
+      const synthetic = {
+        id: `sold-${normalize(productCode) || normalize(productId) || "x"}-${String(lastTs)}`,
+        event_type: "SOLD",
+        actor_id: "",
+        prev_state_hash: "",
+        new_state_hash: normalize(product?.current_state_hash) || normalize(stateHash) || "",
+        chain_tx_hash: "",
+        notes: "Marked as sold",
+        created_at: new Date(lastTs + 1000).toISOString(),
+        actor_role: "system",
+        actor_email: ""
+      };
+      return [...mapped, synthetic];
+    }
+
+    return mapped;
+  }, [rawEvents, isSold, productCode, productId, product?.current_state_hash, stateHash]);
 
   const availableDetails = useMemo(() => {
     const list = [];
@@ -340,6 +433,7 @@ function Customer() {
 
     add("Product name", productName);
     add("Product code", productCode, true);
+    add("Status", isSold ? "SOLD" : hasValue(statusFromScan) ? statusFromScan : soldChecked ? "OWNED" : "");
     add("Batch", batch);
     add("Brand", brand);
     add("Manufacturer", manufacturer);
@@ -351,7 +445,7 @@ function Customer() {
     add("NFC UID", nfcUid, true);
 
     return list;
-  }, [productName, productCode, batch, brand, manufacturer, serialNo, mfgDate, expDate, warranty, seller, nfcUid]);
+  }, [productName, productCode, isSold, statusFromScan, soldChecked, batch, brand, manufacturer, serialNo, mfgDate, expDate, warranty, seller, nfcUid]);
 
   const exampleUrl = useMemo(() => {
     const pid = normalize(productId) || "P2001";
@@ -361,10 +455,16 @@ function Customer() {
 
   const canPurchase = useMemo(() => {
     if (!verdict) return false;
+    const vCan = verdict?.canPurchase;
+    if (vCan === true) return true;
+    if (vCan === false) return false;
+
     if (!verdict.isAuthentic) return false;
-    if (!hasValue(productId) || !hasValue(stateHash)) return false;
+    if (!hasValue(productCode) || !hasValue(stateHash)) return false;
+    if (verdict.isLatestDbState === false) return false;
+    if (isSold) return false;
     return true;
-  }, [verdict, productId, stateHash]);
+  }, [verdict, productCode, stateHash, isSold]);
 
   const openOrders = useCallback(() => {
     if (!canPurchase) return;
@@ -384,13 +484,18 @@ function Customer() {
   }, []);
 
   const ordersPayload = useMemo(() => {
+    const pid = normalize(productId);
+    const sh = normalize(stateHash);
+    const pc = normalize(productCode) || pid;
     return {
-      productId: normalize(productId),
-      stateHash: normalize(stateHash),
+      productId: pid,
+      stateHash: sh,
+      product_code: pc,
+      state_hash: sh,
       product: product || null,
       verdict: verdict || null
     };
-  }, [productId, stateHash, product, verdict]);
+  }, [productId, stateHash, productCode, product, verdict]);
 
   return (
     <div className="cv-shell">
@@ -430,41 +535,8 @@ function Customer() {
                   </button>
                 ) : null}
               </div>
-            </div>
 
-            <div className={`cv-summary cv-summary-${overallTone}`}>
-              <div className="cv-summary-top">
-                <div className="cv-summary-title">Verification result</div>
-                {verdict ? (
-                  <div className={`cv-pill ${verdict.isAuthentic ? "ok" : "bad"}`}>{verdict.isAuthentic ? "AUTHENTIC" : "NOT AUTHENTIC"}</div>
-                ) : (
-                  <div className="cv-pill neutral">Not verified yet</div>
-                )}
-              </div>
-
-              <div className="cv-summary-msg">{verdict?.message ? verdict.message : "Run verification to see authenticity checks."}</div>
-
-              <div className="cv-checks">
-                {checks.length ? (
-                  checks.map((c) => (
-                    <div key={c.label} className={`cv-check ${c.status ? "ok" : "bad"}`}>
-                      <div className="cv-check-left">
-                        <div className="cv-check-dot" />
-                        <div className="cv-check-label">{c.label}</div>
-                      </div>
-                      <div className="cv-check-right">{c.text}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="cv-check empty">
-                    <div className="cv-check-left">
-                      <div className="cv-check-dot" />
-                      <div className="cv-check-label">Waiting</div>
-                    </div>
-                    <div className="cv-check-right">No checks yet</div>
-                  </div>
-                )}
-              </div>
+              {isSold ? <div className="cv-error">This product is already SOLD.</div> : null}
             </div>
           </div>
         </section>
@@ -666,6 +738,12 @@ function Customer() {
                     </button>
                   </div>
                 ) : null}
+
+                {!canPurchase && isSold ? (
+                  <div style={{ marginTop: 10 }}>
+                    <div className="cv-error">The Product you are looking  is SOLD.</div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -776,7 +854,7 @@ function Customer() {
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <div style={{ fontWeight: 700, color: "#fff" }}>Orders</div>
                 <div style={{ opacity: 0.75, fontSize: 12 }}>
-                  {normalize(productId) ? `Product: ${normalize(productId)}` : "Create a new order"}
+                  {normalize(productCode) ? `Product: ${normalize(productCode)}` : normalize(productId) ? `Product: ${normalize(productId)}` : "Create a new order"}
                 </div>
               </div>
 

@@ -92,6 +92,27 @@
   color: var(--od-muted);
   background: rgba(10, 16, 32, 0.02);
 }
+.od-top-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.od-embedded .od-main {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.od-embedded .od-top {
+  padding: 6px 2px 12px;
+}
+
+.od-embedded .od-toast {
+  bottom: 10px;
+}
+
 
 .od-btn {
   border: 1px solid var(--od-border);

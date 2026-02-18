@@ -31,16 +31,12 @@ function Customer() {
   const mountedRef = useRef(true);
   const scannerId = "cv-qr-reader";
 
-  const clearedOnceRef = useRef(false);
   const clearNonceRef = useRef(0);
 
   const [imgOk, setImgOk] = useState(false);
   const [imgLoading, setImgLoading] = useState(false);
 
   const [ordersOpen, setOrdersOpen] = useState(false);
-
-  const [soldByMine, setSoldByMine] = useState(false);
-  const [soldChecked, setSoldChecked] = useState(false);
 
   const showToast = useCallback((msg) => {
     setToast(msg);
@@ -106,7 +102,6 @@ function Customer() {
   }, []);
 
   const clearAll = useCallback(async () => {
-    clearedOnceRef.current = true;
     clearNonceRef.current += 1;
     setQrPayload("");
     setProductId("");
@@ -117,8 +112,6 @@ function Customer() {
     setImgOk(false);
     setImgLoading(false);
     setOrdersOpen(false);
-    setSoldByMine(false);
-    setSoldChecked(false);
     await stopScanner();
   }, [stopScanner]);
 
@@ -129,7 +122,6 @@ function Customer() {
       setProductId(pid);
       setStateHash(sh);
       setQrPayload("");
-      clearedOnceRef.current = false;
     }
   }, [searchParams]);
 
@@ -137,7 +129,6 @@ function Customer() {
     if (parsedFromQr) {
       setProductId(parsedFromQr.productId);
       setStateHash(parsedFromQr.stateHash);
-      clearedOnceRef.current = false;
     }
   }, [parsedFromQr]);
 
@@ -152,13 +143,10 @@ function Customer() {
         return;
       }
 
-      clearedOnceRef.current = false;
       setError("");
       setLoading(true);
       setResData(null);
       setOrdersOpen(false);
-      setSoldByMine(false);
-      setSoldChecked(false);
 
       try {
         const data = await apiFetch("/api/products/scan", {
@@ -169,9 +157,7 @@ function Customer() {
         if (!mountedRef.current) return;
 
         clearNonceRef.current += 1;
-        const enriched = { ...(data || {}), __img_nonce: clearNonceRef.current };
-        setResData(enriched);
-
+        setResData({ ...(data || {}), __img_nonce: clearNonceRef.current });
         showToast("Verification completed");
       } catch (e) {
         if (!mountedRef.current) return;
@@ -192,9 +178,8 @@ function Customer() {
 
   const verdict = resData?.verdict || null;
   const product = resData?.product || null;
-  const rawEvents = Array.isArray(resData?.events) ? resData.events : [];
-  const imgNonce = resData?.__img_nonce || 0;
 
+  const imgNonce = resData?.__img_nonce || 0;
   const meta = product?.meta_json && typeof product.meta_json === "object" ? product.meta_json : {};
 
   const productName = normalize(product?.name) || normalize(meta?.name) || "";
@@ -239,53 +224,6 @@ function Customer() {
     if (v) return String(verdict?.isSold) === "true";
     return normalize(statusFromScan).toUpperCase() === "SOLD";
   }, [verdict, statusFromScan]);
-
-  const isSold = useMemo(() => isSoldFromScan || soldByMine, [isSoldFromScan, soldByMine]);
-
-  useEffect(() => {
-    const pc = normalize(productCode);
-    if (!pc) return;
-
-    if (isSoldFromScan) {
-      setSoldByMine(false);
-      setSoldChecked(true);
-      return;
-    }
-
-    const token = normalize(localStorage.getItem("token") || localStorage.getItem("access_token") || "");
-    if (!token) {
-      setSoldByMine(false);
-      setSoldChecked(true);
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await apiFetch("/api/products/mine", {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (cancelled) return;
-
-        const arr = Array.isArray(data?.products) ? data.products : [];
-        const match = arr.find((p) => normalize(p?.product_code) === pc);
-        const st = normalize(match?.status).toUpperCase();
-        setSoldByMine(st === "SOLD");
-        setSoldChecked(true);
-      } catch {
-        if (cancelled) return;
-        setSoldByMine(false);
-        setSoldChecked(true);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [apiFetch, productCode, isSoldFromScan]);
 
   const prettyDate = (d) => {
     const v = normalize(d);
@@ -339,7 +277,6 @@ function Customer() {
             setError("QR scanned, but it did not contain a valid link or payload.");
             return;
           }
-          clearedOnceRef.current = false;
           setProductId(extracted.productId);
           setStateHash(extracted.stateHash);
           setQrPayload("");
@@ -365,27 +302,6 @@ function Customer() {
     };
   }, [stopScanner]);
 
-  const checks = useMemo(() => {
-    if (!verdict) return [];
-    const items = [];
-
-    const push = (label, value, okText = "Pass", badText = "Fail") => {
-      if (value === null || value === undefined) return;
-      items.push({ label, status: !!value, text: value ? okText : badText });
-    };
-
-    push("Authenticity", verdict.isAuthentic, "Authentic", "Not authentic");
-    push("Latest database state", verdict.isLatestDbState, "Latest", "Old QR detected");
-    push("Database hash matches cloud", verdict.dbCloudHashMatches, "Matched", "Mismatch");
-    push("Blockchain hash matches cloud", verdict.chainCloudHashMatches, "Matched", "Mismatch");
-    push("NFC linked to product", verdict.nfcMatches ?? verdict.nfcUidMatches ?? verdict.isNfcValid, "Matched", "Mismatch");
-    push("Sale status", !isSold, "Available", "SOLD");
-
-    return items;
-  }, [verdict, isSold]);
-
-  const overallTone = verdict?.isAuthentic ? "ok" : verdict ? "bad" : "neutral";
-
   const formatActor = (e) => {
     const email = normalize(e?.actor_email);
     const role = normalize(e?.actor_role);
@@ -393,18 +309,23 @@ function Customer() {
     return normalize(e?.actor_id) || "-";
   };
 
+  const rawEventsMemo = useMemo(() => (Array.isArray(resData?.events) ? resData.events : []), [resData?.events]);
+
   const events = useMemo(() => {
-    const mapped = rawEvents.map((e) => ({
+    const mapped = rawEventsMemo.map((e) => ({
       ...e,
       __type: normalize(e?.event_type) || "EVENT"
     }));
 
-    const hasSoldAlready = mapped.some((e) => normalize(e.__type).toUpperCase() === "SOLD" || normalize(e.__type).toUpperCase() === "PURCHASE");
-    if (!hasSoldAlready && isSold) {
+    const hasSoldAlready = mapped.some((e) => {
+      const t = normalize(e.__type).toUpperCase();
+      return t === "SOLD" || t === "PURCHASE";
+    });
+
+    if (!hasSoldAlready && isSoldFromScan) {
       const lastTs =
-        mapped.length && mapped[mapped.length - 1]?.created_at
-          ? new Date(mapped[mapped.length - 1].created_at).getTime()
-          : Date.now();
+        mapped.length && mapped[mapped.length - 1]?.created_at ? new Date(mapped[mapped.length - 1].created_at).getTime() : Date.now();
+
       const synthetic = {
         id: `sold-${normalize(productCode) || normalize(productId) || "x"}-${String(lastTs)}`,
         event_type: "SOLD",
@@ -417,11 +338,12 @@ function Customer() {
         actor_role: "system",
         actor_email: ""
       };
+
       return [...mapped, synthetic];
     }
 
     return mapped;
-  }, [rawEvents, isSold, productCode, productId, product?.current_state_hash, stateHash]);
+  }, [rawEventsMemo, isSoldFromScan, productCode, productId, product?.current_state_hash, stateHash]);
 
   const availableDetails = useMemo(() => {
     const list = [];
@@ -433,7 +355,7 @@ function Customer() {
 
     add("Product name", productName);
     add("Product code", productCode, true);
-    add("Status", isSold ? "SOLD" : hasValue(statusFromScan) ? statusFromScan : soldChecked ? "OWNED" : "");
+    add("Status", isSoldFromScan ? "SOLD" : hasValue(statusFromScan) ? statusFromScan : "");
     add("Batch", batch);
     add("Brand", brand);
     add("Manufacturer", manufacturer);
@@ -445,7 +367,7 @@ function Customer() {
     add("NFC UID", nfcUid, true);
 
     return list;
-  }, [productName, productCode, isSold, statusFromScan, soldChecked, batch, brand, manufacturer, serialNo, mfgDate, expDate, warranty, seller, nfcUid]);
+  }, [productName, productCode, isSoldFromScan, statusFromScan, batch, brand, manufacturer, serialNo, mfgDate, expDate, warranty, seller, nfcUid]);
 
   const exampleUrl = useMemo(() => {
     const pid = normalize(productId) || "P2001";
@@ -458,13 +380,12 @@ function Customer() {
     const vCan = verdict?.canPurchase;
     if (vCan === true) return true;
     if (vCan === false) return false;
-
     if (!verdict.isAuthentic) return false;
     if (!hasValue(productCode) || !hasValue(stateHash)) return false;
     if (verdict.isLatestDbState === false) return false;
-    if (isSold) return false;
+    if (isSoldFromScan) return false;
     return true;
-  }, [verdict, productCode, stateHash, isSold]);
+  }, [verdict, productCode, stateHash, isSoldFromScan]);
 
   const openOrders = useCallback(() => {
     if (!canPurchase) return;
@@ -536,7 +457,7 @@ function Customer() {
                 ) : null}
               </div>
 
-              {isSold ? <div className="cv-error">This product is already SOLD.</div> : null}
+              {isSoldFromScan ? <div className="cv-error">This product is already SOLD.</div> : null}
             </div>
           </div>
         </section>
@@ -563,7 +484,6 @@ function Customer() {
                 onClick={() => {
                   const sample = JSON.stringify({ productId: "P2001", stateHash: "STATE_HASH" });
                   setQrPayload(sample);
-                  clearedOnceRef.current = false;
                   showToast("Example payload inserted");
                 }}
                 disabled={loading}
@@ -591,10 +511,7 @@ function Customer() {
               <textarea
                 className="cv-textarea mono"
                 value={qrPayload}
-                onChange={(e) => {
-                  setQrPayload(e.target.value);
-                  clearedOnceRef.current = false;
-                }}
+                onChange={(e) => setQrPayload(e.target.value)}
                 placeholder='Paste QR link like https://your-site/customer?productId=P2001&stateHash=... or JSON {"productId":"P2001","stateHash":"..."}'
                 disabled={loading}
               />
@@ -608,16 +525,7 @@ function Customer() {
                     Copy
                   </button>
                 </div>
-                <input
-                  className="cv-input mono"
-                  value={productId}
-                  onChange={(e) => {
-                    setProductId(e.target.value);
-                    clearedOnceRef.current = false;
-                  }}
-                  placeholder="P2001"
-                  disabled={loading}
-                />
+                <input className="cv-input mono" value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="P2001" disabled={loading} />
               </div>
 
               <div className="cv-field">
@@ -627,16 +535,7 @@ function Customer() {
                     Copy
                   </button>
                 </div>
-                <input
-                  className="cv-input mono"
-                  value={stateHash}
-                  onChange={(e) => {
-                    setStateHash(e.target.value);
-                    clearedOnceRef.current = false;
-                  }}
-                  placeholder="(auto from QR)"
-                  disabled={loading}
-                />
+                <input className="cv-input mono" value={stateHash} onChange={(e) => setStateHash(e.target.value)} placeholder="(auto from QR)" disabled={loading} />
               </div>
             </div>
 
@@ -739,9 +638,9 @@ function Customer() {
                   </div>
                 ) : null}
 
-                {!canPurchase && isSold ? (
+                {!canPurchase && isSoldFromScan ? (
                   <div style={{ marginTop: 10 }}>
-                    <div className="cv-error">The Product you are looking  is SOLD.</div>
+                    <div className="cv-error">The Product you are looking is SOLD.</div>
                   </div>
                 ) : null}
               </div>
